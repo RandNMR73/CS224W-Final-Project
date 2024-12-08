@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn import BCEWithLogitsLoss
 from torch.nn import Embedding, ModuleDict
 
-from torch_geometric.nn import HeteroConv, LayerNorm, GCNConv
+from torch_geometric.nn import HeteroConv, LayerNorm, GCNConv, GATConv
 from torch_geometric.typing import EdgeType, NodeType
 
 from typing import Any, Dict, List

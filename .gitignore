@@ -1,4 +1,5 @@
 #Virtual Environment
+.conda/
 venv/
 
 #RelBench Data
