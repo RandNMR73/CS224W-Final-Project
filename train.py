@@ -3,6 +3,7 @@ from tqdm import tqdm
 from torch.nn import BCEWithLogitsLoss, L1Loss
 
 import copy 
+import random
 import numpy as np
 import config
 import math
@@ -69,18 +70,37 @@ def test(model, task, loader: NeighborLoader, loss = True) -> np.ndarray:
     return torch.cat(pred_list, dim=0).numpy()
 
 def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
-    for task, train_items in task_to_train_info.items():
-        state_dict = None
+    task_epochs = {task: 0 for task in task_to_train_info.keys()}
+    state_dict = None
+
+    total_epochs_to_train = len(task_to_train_info) * config.EPOCHS
+    total_epochs_trained = 0
+
+    while total_epochs_trained < total_epochs_to_train:
+        valid_keys = [key for key in task_epochs.keys() if task_epochs[key] < config.EPOCHS]
+        
+        if not valid_keys:
+            print("Training finished.")
+            break
+
+        random_task = random.choice(valid_keys)
+        train_items = task_to_train_info[random_task]
+
         higher_is_better = config.HIGHER_IS_BETTER[train_items.task_metrics[0]]
         best_val_metric = -math.inf if higher_is_better else math.inf
         tune_metric = train_items.task_metrics[0].__name__
-        for epoch in range(1, config.EPOCHS + 1):
+        for epoch in range(config.EPOCHS_TO_SWITCH + 1):
+            if task_epochs[random_task] >= config.EPOCHS:
+                break
+
             train_loss = train(train_items.task, train_items.entity_table, model, train_items.loader_dict["train"], loss_fn, optimizer)
             val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
             val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
-            print(f"--------Task: {task}--------")
-            print(f"Epoch: {epoch:02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
+            print(f"Task: {random_task}, Epoch: {epoch:02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
             
+            task_epochs[random_task] += 1
+            total_epochs_trained += 1
+
             if (higher_is_better and val_metrics[tune_metric] > best_val_metric) or (
                 not higher_is_better and val_metrics[tune_metric] < best_val_metric
             ):
