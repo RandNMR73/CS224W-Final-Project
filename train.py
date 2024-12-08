@@ -129,6 +129,7 @@ def main():
         aggr="sum",
         norm="batch_norm",
     ).to(config.DEVICE)
+    model = torch.compile(model)
 
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
