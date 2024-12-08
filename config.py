@@ -1,7 +1,12 @@
-ROOT_DIR = ""
+import torch 
+
+ROOT_DIR = "./data"
 NEIGHBORS_PER_NODE = 128
 DEPTH = 2
+NUM_WORKERS = 0
+BATCH_SIZE = 512
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #Dictionary that maps RelBench database to their associated tasks
 RELBENCH_DATASETS = {
     "rel-amazon": ["user-churn", "item-churn", "user-ltv", "item-ltv", "user-item-purchase", "user-item-rate", "user-item-review"], 

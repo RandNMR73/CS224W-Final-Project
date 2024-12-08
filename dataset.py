@@ -40,7 +40,7 @@ def get_data_graph(dataset):
     col_to_stype_dict = get_stype_proposal(db)
 
     text_embedder_cfg = TextEmbedderConfig(
-        text_embedder=GloveTextEmbedding(device=config.device), batch_size=256
+        text_embedder=GloveTextEmbedding(device=config.DEVICE), batch_size=256
     )
 
     # Get the heterogeneous graph and column statistics
@@ -49,7 +49,7 @@ def get_data_graph(dataset):
         col_to_stype_dict=col_to_stype_dict,  # speficied column types
         text_embedder_cfg=text_embedder_cfg,  # our chosen text encoder
         cache_dir=os.path.join(
-            config.root_dir, f"rel-f1_materialized_cache"
+            config.ROOT_DIR, f"rel-f1_materialized_cache"
         ),  # store materialized graph for convenience
     )
 
@@ -84,17 +84,34 @@ def load_data(dataset, task, train_table, val_table, test_table):
         loader_dict[split] = NeighborLoader(
             hetero_graph,
             num_neighbors=[
-                config.neighors_per_node for i in range(config.depth)
+                config.NEIGHBORS_PER_NODE for i in range(config.DEPTH)
             ],  # we sample subgraphs of depth 2, 128 neighbors per node.
             time_attr="time",
             input_nodes=table_input.nodes,
             input_time=table_input.time,
             transform=table_input.transform,
-            batch_size=512,
+            batch_size=config.BATCH_SIZE,
             temporal_strategy="uniform",
             shuffle = split == "train",
-            num_workers=0,
+            num_workers=config.NUM_WORKERS,
             persistent_workers=False,
         )
     
-    return loader_dict, col_stats_dict
+    return loader_dict, col_stats_dict, entity_table
+
+def create_loader_dicts():
+    task_to_train_info = {}
+    for database_name, tasks in config.RELBENCH_DATASETS.items():
+        for task in tasks:
+            dataset, task, train_table, val_table, test_table = load_dataset(database_name, task)
+            loader_dict, col_stats_dict, entity_table = load_data(dataset, task, train_table, val_table, test_table)
+            task_to_train_info[task] = (task.entity_table, loader_dict, col_stats_dict, entity_table)
+        
+    return task_to_train_info
+
+def main():
+    task_to_train_info = create_loader_dicts()
+    print(task_to_train_info)
+
+if __name__ == "__main__":
+    main()
