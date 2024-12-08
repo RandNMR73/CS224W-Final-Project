@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from collections import namedtuple
 
 from relbench.datasets import get_dataset
 from relbench.tasks import get_task
@@ -14,7 +15,7 @@ from text_embeddings import GloveTextEmbedding
 
 import config
 
-def load_dataset(dataset_name, task_name):
+def load_task_dataset(dataset_name, task_name):
     """
     Load the dataset and task for the given dataset and task name.
 
@@ -23,14 +24,13 @@ def load_dataset(dataset_name, task_name):
         task_name (str): Name of the task.
     """
 
-    dataset = get_dataset("rel-f1", download=True)
-    task = get_task("rel-f1", "driver-position", download=True)
+    task = get_task(dataset_name, task_name, download=True)
 
     train_table = task.get_table("train")
     val_table = task.get_table("val")
     test_table = task.get_table("test")
 
-    return dataset, task, train_table, val_table, test_table
+    return task, train_table, val_table, test_table
 
 def get_data_graph(dataset):
     """
@@ -55,12 +55,13 @@ def get_data_graph(dataset):
 
     return hetero_graph, col_stats_dict
 
-def load_data(dataset, task, train_table, val_table, test_table):
+def load_data(hetero_graph, task, train_table, val_table, test_table):
     """
     Return a single dictionary containing the dataset, task, train_table, val_table, 
     test_table, hetero_graph, and col_stats_dict
 
     Args:
+        hetero_graph (HeteroData): HeteroData object
         dataset (Dataset): Dataset object
         task (Task): Task object
         train_table (Table): Train Table object
@@ -68,7 +69,6 @@ def load_data(dataset, task, train_table, val_table, test_table):
         test_table (Table): Test Table object
     """
     
-    hetero_graph, col_stats_dict = get_data_graph(dataset)
     loader_dict = {}
 
     for split, table in [
@@ -97,20 +97,23 @@ def load_data(dataset, task, train_table, val_table, test_table):
             persistent_workers=False,
         )
     
-    return loader_dict, col_stats_dict, entity_table
+    return loader_dict, entity_table
 
-def create_loader_dicts():
+TaskTrainValInfo = namedtuple("TaskTrainValInfo", ["task", "task_metrics", "loader_dict", 
+                                                        "col_stats_dict", "entity_table", "val_table"])
+def create_task_train_dict(dataset_name):
     task_to_train_info = {}
-    for database_name, tasks in config.RELBENCH_DATASETS.items():
-        for task in tasks:
-            dataset, task, train_table, val_table, test_table = load_dataset(database_name, task)
-            loader_dict, col_stats_dict, entity_table = load_data(dataset, task, train_table, val_table, test_table)
-            task_to_train_info[task] = (task.entity_table, loader_dict, col_stats_dict, entity_table)
-        
-    return task_to_train_info
+    dataset = get_dataset(dataset_name, download=True)
+    hetero_graph, col_stats_dict = get_data_graph(dataset)
+    for task_name in config.RELBENCH_DATASETS[dataset_name]:
+        task, train_table, val_table, test_table = load_task_dataset(dataset_name, task_name)
+        loader_dict, entity_table = load_data(hetero_graph, task, train_table, val_table, test_table)
+        task_to_train_info[task_name] = TaskTrainValInfo(task, task.metrics, loader_dict, col_stats_dict, entity_table, val_table)
+
+    return hetero_graph, col_stats_dict, task_to_train_info
 
 def main():
-    task_to_train_info = create_loader_dicts()
+    hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
     print(task_to_train_info)
 
 if __name__ == "__main__":

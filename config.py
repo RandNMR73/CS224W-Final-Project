@@ -1,4 +1,5 @@
 import torch 
+import relbench
 
 ROOT_DIR = "./data"
 NEIGHBORS_PER_NODE = 128
@@ -6,6 +7,12 @@ DEPTH = 2
 NUM_WORKERS = 0
 BATCH_SIZE = 512
 
+#Model-related Params
+EPOCHS = 10
+EPOCHS_TO_SAVE = 2
+LR = 0.0005
+
+CHECKPOINT = False
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #Dictionary that maps RelBench database to their associated tasks
 RELBENCH_DATASETS = {
@@ -16,4 +23,32 @@ RELBENCH_DATASETS = {
     "rel-hm": ["user-churn", "item-sales", "user-item-purchase"],
     "rel-event": ["user-repeat", "user-ignore", "user-attendance"],
     "rel-avito": ["user-visits", "user-clicks", "ad-ctr", "user-ad-visit"] 
+}
+
+HIGHER_IS_BETTER = {
+    relbench.metrics.accuracy: True,
+    relbench.metrics.log_loss: False,
+    relbench.metrics.f1: True,
+    relbench.metrics.roc_auc: True,
+    relbench.metrics.average_precision: True,
+    relbench.metrics.auprc: True,
+    relbench.metrics.macro_f1: True,
+    relbench.metrics.micro_f1: True,
+    relbench.metrics.mae: False,
+    relbench.metrics.mse: False,
+    relbench.metrics.rmse: False,
+    relbench.metrics.r2: True,
+    relbench.metrics.multilabel_auprc_micro: True,
+    relbench.metrics.multilabel_auprc_macro: True,
+    relbench.metrics.multilabel_auroc_micro: True,
+    relbench.metrics.multilabel_auroc_macro: True,
+    relbench.metrics.multilabel_f1_micro: True,
+    relbench.metrics.multilabel_f1_macro: True,
+    relbench.metrics.multilabel_recall_micro: True,
+    relbench.metrics.multilabel_recall_macro: True,
+    relbench.metrics.multilabel_precision_micro: True,
+    relbench.metrics.multilabel_precision_macro: True,
+    relbench.metrics.link_prediction_recall: True,
+    relbench.metrics.link_prediction_precision: True,
+    relbench.metrics.link_prediction_map: True,
 }
