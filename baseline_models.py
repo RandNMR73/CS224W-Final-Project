@@ -132,8 +132,8 @@ class HeteroGAT(torch.nn.Module):
             x_dict = {key: x.relu() for key, x in x_dict.items()}
 
         return x_dict
-
-def process_hetero_batch(x_dict, batch: HeteroData):
+        
+def process_hetero_batch_nodes(x_dict, batch):
     node_type_counts = []  # List to store the total number of nodes for each node type
     node_features_dict = {}  # Dictionary to store node features for each node type and hop
     
@@ -153,9 +153,9 @@ def process_hetero_batch(x_dict, batch: HeteroData):
             node_features_dict[node_type] = node_features_hop  # Store features by hop for this node type
         
         node_type_counts.append(sum(node_counts))  # Total nodes for this node type
-    
-    edge_index_dict = {}  # Dictionary to that maps relation types to edge indices for each edge type and hop
+    return node_type_counts, node_features_dict
 
+def compute_node_offsets(batch, node_type_counts):
     # Compute offsets for global node indexing
     offsets = {}  # Dictionary to map node types to their global offset
     current_offset = 0  # Start offset
@@ -165,8 +165,10 @@ def process_hetero_batch(x_dict, batch: HeteroData):
             offsets[node_type] = current_offset  # Assign current offset to the node type
             current_offset += count  # Update offset for the next node type
 
-    # Determine the number of hops (assume all edge types have the same number of hops)
-    num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
+    return offsets
+
+def process_hetero_edges(batch):
+    edge_index_dict = {}  # Dictionary to that maps relation types to edge indices for each edge type and hop
 
     # Extract edge indices for each edge type and hop
     for relation_type, relation_type_hop_counts in batch.num_sampled_edges_dict.items():
@@ -185,6 +187,18 @@ def process_hetero_batch(x_dict, batch: HeteroData):
                     rel_type_hop_edge_index[hop] = indices  # Store edge indices for this hop
             
             edge_index_dict[relation_type] = rel_type_hop_edge_index  # Store edges by hop for this relation type
+    
+    return edge_index_dict
+
+def process_hetero_batch(x_dict, batch: HeteroData):
+    node_type_counts, node_features_dict = process_hetero_batch_nodes(x_dict, batch)
+    
+    offsets = compute_node_offsets(batch, node_type_counts)
+
+    edge_index_dict = process_hetero_edges(batch)
+
+    # Determine the number of hops (assume all edge types have the same number of hops)
+    num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
 
     # Initialize node features and edge indices for each hop
     node_features = []  # List to store concatenated node features for each hop
