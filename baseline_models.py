@@ -19,6 +19,7 @@ from torch_geometric.nn import MLP
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
 
 import config
+import time
 
 class RGCN(torch.nn.Module):
     """
@@ -133,85 +134,81 @@ class HeteroGAT(torch.nn.Module):
         return x_dict
 
 def process_hetero_batch(x_dict, batch: HeteroData):
-    node_type_counts = []
-    node_features_dict = {}
+    node_type_counts = []  # List to store the total number of nodes for each node type
+    node_features_dict = {}  # Dictionary to store node features for each node type and hop
     
+    # Iterate over all node types and their sampled node counts
     for node_type, node_counts in batch.num_sampled_nodes_dict.items():
-        if sum(node_counts):
-            cumsum_nodes = torch.cumsum(torch.tensor(node_counts), dim=0)
-            # Extract node features for each hop
-            node_features_hop = {}
-            for hop in range(len(node_counts)):
-                if node_counts[hop]:
-                    start = cumsum_nodes[hop - 1].item() if hop > 0 else 0
-                    end = cumsum_nodes[hop].item()
-                    node_features_hop[hop] = x_dict[node_type][start:end]
+        if sum(node_counts):  # Process only if there are sampled nodes
+            cumsum_nodes = torch.cumsum(torch.tensor(node_counts), dim=0)  # Compute cumulative sum of node counts
+            node_features_hop = {}  # Dictionary to store features for each hop for the current node type
             
-            node_features_dict[node_type] = node_features_hop
+            # Extract node features for each hop
+            for hop in range(len(node_counts)):
+                if node_counts[hop]:  # Skip hops with zero nodes
+                    start = cumsum_nodes[hop - 1].item() if hop > 0 else 0  # Start index for this hop
+                    end = cumsum_nodes[hop].item()  # End index for this hop
+                    node_features_hop[hop] = x_dict[node_type][start:end]  # Slice node features for this hop
+            
+            node_features_dict[node_type] = node_features_hop  # Store features by hop for this node type
         
-        node_type_counts.append(sum(node_counts))
+        node_type_counts.append(sum(node_counts))  # Total nodes for this node type
     
-    edge_index_dict = {}
+    edge_index_dict = {}  # Dictionary to that maps relation types to edge indices for each edge type and hop
 
-    offsets = {}
-    current_offset = 0
+    # Compute offsets for global node indexing
+    offsets = {}  # Dictionary to map node types to their global offset
+    current_offset = 0  # Start offset
 
-    # Compute offsets for node types with non-zero counts
     for node_type, count in zip(batch.num_sampled_nodes_dict.keys(), node_type_counts):
-        if count > 0:  # Only process node types with nodes
-            offsets[node_type] = current_offset
-            current_offset += count
+        if count > 0:  # Only process node types with non-zero nodes
+            offsets[node_type] = current_offset  # Assign current offset to the node type
+            current_offset += count  # Update offset for the next node type
 
+    # Determine the number of hops (assume all edge types have the same number of hops)
     num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
 
+    # Extract edge indices for each edge type and hop
     for relation_type, relation_type_hop_counts in batch.num_sampled_edges_dict.items():
-        cumsum_rel_types = torch.cumsum(torch.tensor(relation_type_hop_counts), dim=0)
-        if sum(cumsum_rel_types):
-            # Extract sparse COO tensors for each hop
-            # If there are 2 hops, then length of number of hops is 2
-            # First entry of relation_type_hop_counts is for edges between nodes of hop0 and hop1, etc.
-            rel_type_hop_edge_index = {}
+        cumsum_rel_types = torch.cumsum(torch.tensor(relation_type_hop_counts), dim=0)  # Cumulative edge counts
+        if sum(cumsum_rel_types):  # Process only if there are edges
+            rel_type_hop_edge_index = {}  # Dictionary to store edge indices for each hop
+            
+            # Extract edges for each hop
             for hop in range(len(relation_type_hop_counts)):
-                if relation_type_hop_counts[hop]:
-                    start = cumsum_rel_types[hop - 1] if hop > 0 else 0
-                    end = cumsum_rel_types[hop]
+                if relation_type_hop_counts[hop]:  # Skip hops with zero edges
+                    start = cumsum_rel_types[hop - 1] if hop > 0 else 0  # Start index for this hop
+                    end = cumsum_rel_types[hop]  # End index for this hop
                     
-                    indices = batch[relation_type].edge_index[:, start:end].clone()  # Edge indices
-                    rel_type_hop_edge_index[hop] = indices
-                            
-            edge_index_dict[relation_type] = rel_type_hop_edge_index
+                    # Slice the edge index tensor for this hop
+                    indices = batch[relation_type].edge_index[:, start:end].clone()  # Clone to avoid in-place modification
+                    rel_type_hop_edge_index[hop] = indices  # Store edge indices for this hop
+            
+            edge_index_dict[relation_type] = rel_type_hop_edge_index  # Store edges by hop for this relation type
 
-    node_features = []
-    # we need a COO tensor for each hop (each hop corresponds to a separate subgraph)
-    edge_index = [torch.empty((2, 0), dtype=torch.long, device = config.DEVICE) for _ in range(num_hops)]
-    print(offsets)
+    # Initialize node features and edge indices for each hop
+    node_features = []  # List to store concatenated node features for each hop
+    edge_index = [torch.empty((2, 0), dtype=torch.long, device=config.DEVICE) for _ in range(num_hops)]  # Empty edge index for each hop
+    
+    # Combine edge indices across all relation types and hops
     for relation_type, rel_type_hop_edge_index in edge_index_dict.items():
-        print(relation_type, rel_type_hop_edge_index)
+        print(relation_type, rel_type_hop_edge_index)  # Debug: Print edge indices for this relation type
+        
         for hop, hop_edge_index in rel_type_hop_edge_index.items():
-            h_type = relation_type[0]
-            t_type = relation_type[2]
-            h_offset = offsets[h_type]
-            t_offset = offsets[t_type]
+            h_type = relation_type[0]  # Source node type
+            t_type = relation_type[2]  # Target node type
+            h_offset = offsets[h_type]  # Global offset for source nodes
+            t_offset = offsets[t_type]  # Global offset for target nodes
 
-            # Add offsets to the current hop's edge_index
+            # Add offsets to source and target node indices to make them global
             hop_edge_index = hop_edge_index.clone()  # Ensure no in-place modification
             hop_edge_index[0] += h_offset
             hop_edge_index[1] += t_offset
 
             # Concatenate the new edges to the existing edge_index for the current hop
             edge_index[hop] = torch.cat((edge_index[hop], hop_edge_index), dim=1)
-             
-            # values = torch.ones(indices.size(1))  # Default values (weights = 1)
-            # sparse_coo_hop = torch.sparse_coo_tensor(
-            #     indices=indices,
-            #     values=values,
-            #     size=(batch[relation_type].size(0), batch[relation_type].size(0)), 
-            #     device = config.DEVICE
-            # )
-        print(edge_index)
-        raise ValueError()
 
-    raise ValueError()
+    raise ValueError()  # Placeholder: Raise an exception to stop execution
 
 class BaselineModel(torch.nn.Module):
     def __init__(
