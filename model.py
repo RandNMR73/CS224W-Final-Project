@@ -4,30 +4,12 @@ from torch.nn import functional as F
 import math
 
 # General Architecture Stuff
-# Include GeLU / GeGLU
-# add regularization if needed (we can see based on the training dynamics of model)
+# add regularization if needed (we can see based on the training dynamics of model) (using AdamW by default)
 # sharing vs not sharing params for queries and keys 
-# sharing vs not sharing RMSNorm layer
-
-# mixed precision
+# lr warmup and decay 
+# check optimality of torch methods being called 
 
 class MultiHeadAttention(nn.Module):
-    """
-    A model layer which implements a simplified version of masked attention, as
-    introduced by "Attention Is All You Need" (https://arxiv.org/abs/1706.03762).
-
-    Usage:
-      attn = MultiHeadAttention(embed_dim, num_heads=2)
-
-      # self-attention
-      data = torch.randn(batch_size, sequence_length, embed_dim)
-      self_attn_output = attn(query=data, key=data, value=data)
-
-      # attention using two inputs
-      other_data = torch.randn(batch_size, sequence_length, embed_dim)
-      attn_output = attn(query=data, key=other_data, value=other_data)
-    """
-
     def __init__(self, 
                  embed_dim, # config
                  num_heads, # config
@@ -40,12 +22,19 @@ class MultiHeadAttention(nn.Module):
                  is_eh_att=False, 
                  is_ee_att=False):
         """
-        Construct a new MultiHeadAttention layer.
+        Initializes the MultiHeadAttention module.
 
-        Inputs:
-         - embed_dim: Dimension of the token embedding
-         - num_heads: Number of attention heads
-         - dropout: Dropout probability
+        Args:
+            embed_dim (int): Dimension of the input embeddings.
+            num_heads (int): Number of attention heads.
+            num_nodes (int): Number of nodes in the graph.
+            num_edges (int): Number of edges in the graph.
+            adj_mat (Tensor): Adjacency matrix for the graph.
+            dropout (float): Dropout rate for attention.
+            is_hh_att (bool): Flag for using head-to-head attention.
+            is_he_att (bool): Flag for using head-to-edge attention.
+            is_eh_att (bool): Flag for using edge-to-head attention.
+            is_ee_att (bool): Flag for using edge-to-edge attention.
         """
         super().__init__()
         assert embed_dim % num_heads == 0
@@ -81,28 +70,15 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, q, k, v):
         """
-        q = node embeddings or edge embeddings
-        k = node embeddings or edge embeddings
-        v = node embeddings 
+        Forward pass for the MultiHeadAttention module.
 
-        Calculate the masked attention output for the provided data, computing
-        all attention heads in parallel.
-
-        In the shape definitions below, N is the batch size, S is the source
-        sequence length, T is the target sequence length, and E is the embedding
-        dimension.
-
-        Inputs:
-        - query: Input data to be used as the query, of shape (N, S, E)
-        - key: Input data to be used as the key, of shape (N, T, E)
-        - value: Input data to be used as the value, of shape (N, T, E)
-        - attn_mask: Array of shape (S, T) where mask[i,j] == 0 indicates token
-          i in the source should not influence token j in the target.
+        Args:
+            q (Tensor): Query tensor of shape (N, E).
+            k (Tensor): Key tensor of shape (N, E).
+            v (Tensor): Value tensor of shape (N, E).
 
         Returns:
-        - output: Tensor of shape (N, S, E) giving the weighted combination of
-          data in value according to the attention weights calculated using key
-          and query.
+            Tensor: Output tensor after applying attention.
         """
         N, E = query.shape
         N, E = value.shape
@@ -153,14 +129,33 @@ class MultiHeadAttention(nn.Module):
 # if we want to use later
 class GeGLU(nn.Module):
     def __init__(self):
+        """
+        Initializes the GeGLU module.
+        """
         super(GeGLU, self).__init__()
 
     def forward(self, x):
+        """
+        Forward pass for the GeGLU module.
+
+        Args:
+            x (Tensor): Input tensor.
+
+        Returns:
+            Tensor: Output tensor after applying GeGLU activation.
+        """
         x, gate = x.chunk(2, dim=-1)
         return x * F.gelu(gate)
 
 class FeedForward(nn.Module):
-    def __init__(self, n_embed):
+    def __init__(self, n_embed, dropout):
+        """
+        Initializes the FeedForward module.
+
+        Args:
+            n_embed (int): Dimension of the input embeddings.
+            dropout (float): Dropout rate for the feedforward network.
+        """
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(n_embed, n_embed * 4),
@@ -170,6 +165,15 @@ class FeedForward(nn.Module):
         )
     
     def forward(self, x):
+        """
+        Forward pass for the FeedForward module.
+
+        Args:
+            x (Tensor): Input tensor.
+
+        Returns:
+            Tensor: Output tensor after applying the feedforward network.
+        """
         return self.net(x)
 
 class Block(nn.Module):
@@ -179,21 +183,45 @@ class Block(nn.Module):
                  num_nodes, # pass in directly
                  num_edges, # pass in directly
                  adj_mat, # pass in directly 
-                 dropout, # config
+                 dropout_att, # config
+                 dropout_ffwd,
                  ):
+        """
+        Initializes the Block module, which consists of multiple attention
+        heads and a feedforward network.
+
+        Args:
+            embed_dim (int): Dimension of the input embeddings.
+            num_heads (int): Number of attention heads.
+            num_nodes (int): Number of nodes in the graph.
+            num_edges (int): Number of edges in the graph.
+            adj_mat (Tensor): Adjacency matrix for the graph.
+            dropout_att (float): Dropout rate for attention.
+            dropout_ffwd (float): Dropout rate for the feedforward network.
+        """
         # n_embed, n_heads, head_size, dropout,
         super().__init__()
         head_size = embed_dim // num_heads 
-        self.sa_hh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_hh_att=True)  # (N, H, E/H)
-        self.sa_ee = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_ee_att=True)  # (N, H, E/H)
-        self.sa_he = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_he_att=True)  # (N, H, E/H)
-        self.sa_eh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_eh_att=True)  # (N, H, E/H)
-        self.ffwd = FeedForward(embed_dim)
+        self.sa_hh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True)  # (N, H, E/H)
+        self.sa_ee = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True)  # (N, H, E/H)
+        self.sa_he = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True)  # (N, H, E/H)
+        self.sa_eh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True)  # (N, H, E/H)
+        self.ffwd = FeedForward(embed_dim, dropout_ffwd)
         self.rmsn1_n = nn.RMSNorm(embed_dim)
         self.rmsn1_e = nn.RMSNorm(embed_dim)
         self.rmsn2 = nn.RMSNorm(embed_dim)
     
     def forward(self, x_node, x_edge):
+        """
+        Forward pass for the Block module.
+
+        Args:
+            x_node (Tensor): Input tensor for node embeddings.
+            x_edge (Tensor): Input tensor for edge embeddings.
+
+        Returns:
+            Tensor: Output tensor after applying attention and feedforward layers.
+        """
         h = self.rmsn1_n(x_node)
         e = self.rmsn1_e(x_edge)
         x = self.sa_hh(h, h, h) + self.sa_ee(e, e, h) + self.sa_eh(e, h, h) + self.sa_he(h, e, h)  # can add gating here 
@@ -210,6 +238,20 @@ class RelTransformer(nn.Module):
                  num_edges, # pass in directly
                  adj_mat, # pass in directly 
                  dropout):  # config 
+        """
+        Initializes the RelTransformer module, which consists of multiple
+        blocks of attention and feedforward layers.
+
+        Args:
+            node_embeddings (Tensor): Initial node embeddings.
+            n_embed (int): Dimension of the input embeddings.
+            num_blocks (int): Number of blocks in the transformer.
+            num_heads (int): Number of attention heads.
+            num_nodes (int): Number of nodes in the graph.
+            num_edges (int): Number of edges in the graph.
+            adj_mat (Tensor): Adjacency matrix for the graph.
+            dropout (float): Dropout rate for the transformer.
+        """
         super().__init__()
         self.node_embeddings = nn.Parameter(node_embeddings)
         self.num_nodes = node_embeddings.shape[0]  # N
@@ -221,15 +263,16 @@ class RelTransformer(nn.Module):
             self.blocks.append(Block(n_embed, num_heads, num_nodes, num_edges, adj_mat, dropout)) 
     
     def forward(self):  # pass in node embeddings from subgraph sampling function (make sure that n_embed)
+        """
+        Forward pass for the RelTransformer module.
+
+        Returns:
+            Tensor: Output tensor after passing through all transformer blocks.
+        """
         out = self.node_embeddings
         for block in self.blocks:
             out = block(out, self.edge_embeddings)  # is there something weird about this? potentially, what if we try learning an (n+m) x d tensor instead
         return out
-
-
-# check shapes 
-# stuff to move to train.py:
-# 
 
 # TODOS:
 # DDP, add stuff to train.py file, figure out how 
