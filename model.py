@@ -2,6 +2,12 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
+from typing import Any, Dict, List, Optional
+from torch_frame.data.stats import StatType
+from torch_geometric.data import HeteroData
+
+from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
+from baseline_models import process_hetero_batch
 
 # General Architecture Stuff
 # add regularization if needed (we can see based on the training dynamics of model) (using AdamW by default)
@@ -230,14 +236,16 @@ class Block(nn.Module):
 
 class RelTransformer(nn.Module):
     def __init__(self, 
-                 node_embeddings, 
-                 n_embed, # config
-                 num_blocks, # config              
-                 num_heads, # config
-                 num_nodes, # pass in directly
-                 num_edges, # pass in directly
-                 adj_mat, # pass in directly 
-                 dropout):  # config 
+                data: HeteroData,
+                col_stats_dict: Dict[str, Dict[str, Dict[StatType, Any]]],
+                node_embeddings, 
+                n_embed, # config
+                num_blocks, # config              
+                num_heads, # config
+                num_nodes, # pass in directly
+                num_edges, # pass in directly
+                adj_mat, # pass in directly 
+                dropout):  # config 
         """
         Initializes the RelTransformer module, which consists of multiple
         blocks of attention and feedforward layers.
@@ -253,6 +261,23 @@ class RelTransformer(nn.Module):
             dropout (float): Dropout rate for the transformer.
         """
         super().__init__()
+        # process RDB
+        self.encoder = HeteroEncoder(
+            channels=n_embed,
+            node_to_col_names_dict={
+                node_type: data[node_type].tf.col_names_dict
+                for node_type in data.node_types
+            },
+            node_to_col_stats=col_stats_dict,
+        )
+        self.temporal_encoder = HeteroTemporalEncoder(
+            node_types=[
+                node_type for node_type in data.node_types if "time" in data[node_type]
+            ],
+            channels=n_embed,
+        )
+
+        # process embeddings 
         self.node_embeddings = nn.Parameter(node_embeddings)
         self.num_nodes = node_embeddings.shape[0]  # N
         self.n_embed = n_embed 
@@ -262,16 +287,18 @@ class RelTransformer(nn.Module):
         for _ in range(self.num_blocks):
             self.blocks.append(Block(n_embed, num_heads, num_nodes, num_edges, adj_mat, dropout)) 
     
-    def forward(self):  # pass in node embeddings from subgraph sampling function (make sure that n_embed)
+    def forward(self, x_dict, batch):  # pass in node embeddings from subgraph sampling function (make sure that n_embed)
         """
         Forward pass for the RelTransformer module.
 
         Returns:
             Tensor: Output tensor after passing through all transformer blocks.
         """
+        # pass in x_dict into Gabe's function to get the node embeddings and batch (HeteroData object) into fwd method (look in baseline_models.py)
+        self.node_embeddings = process_hetero_batch(x_dict, batch, self.n_embed)
         out = self.node_embeddings
         for block in self.blocks:
-            out = block(out, self.edge_embeddings)  # is there something weird about this? potentially, what if we try learning an (n+m) x d tensor instead
+            out = block(out, self.edge_embeddings)  # is there something weird about this? yes! what if we try learning an (n+m) x d tensor instead
         return out
 
 # TODOS:
