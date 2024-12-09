@@ -1,6 +1,8 @@
 import torch 
 from tqdm import tqdm
 from torch.nn import BCEWithLogitsLoss, L1Loss
+from torch.amp import GradScaler, autocast
+import contextlib
 
 import copy 
 import random
@@ -12,22 +14,35 @@ from dataset import create_task_train_dict
 
 from torch_geometric.loader import NeighborLoader
 
+from model import RelTransformer
+# from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
+
+# need to add mixed-precision training
+
+# global params 
+embed_dim = config.EMBED_DIM
+num_heads = config.NUM_HEADS
+dropout = config.DROPOUT
+num_layers = config.NUM_LAYERS
+
 def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer) -> float:
     model.train()
-
+    scaler = GradScaler()
     loss_accum = count_accum = 0
     for batch in tqdm(loader):
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
-        pred = model(
-            batch,
-            task.entity_table,
-        )
-        pred = pred.view(-1) if pred.size(1) == 1 else pred
-        
-        loss = loss_fn(pred.float(), batch[entity_table].y.float())
-        loss.backward()
-        optimizer.step()
+        with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
+            pred = model(
+                batch,
+                task.entity_table,
+            )
+            pred = pred.view(-1) if pred.size(1) == 1 else pred
+            loss = loss_fn(pred.float(), batch[entity_table].y.float())
+
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
@@ -119,25 +134,49 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
 def main():
     hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
 
-    model = BaselineModel(
-        data=hetero_graph,
-        col_stats_dict=col_stats_dict,
-        gnn_layer = "HeteroGAT",
-        num_layers=2,
-        channels=128,
-        out_channels=1,
-        aggr="sum",
-        norm="batch_norm",
-    ).to(config.DEVICE)
-    model = torch.compile(model)
+    # model = BaselineModel(
+    #     data=hetero_graph,
+    #     col_stats_dict=col_stats_dict,
+    #     gnn_layer = "HeteroGAT",
+    #     num_layers=2,
+    #     channels=128,
+    #     out_channels=1,
+    #     aggr="sum",
+    #     norm="batch_norm",
+    # ).to(config.DEVICE)
+    # model = torch.compile(model)
 
-    # if you try out different RelBench tasks you will need to change these
-    loss_fn = L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
-    epochs = config.EPOCHS
-    database_name = "rel-f1"
+    # # if you try out different RelBench tasks you will need to change these
+    # loss_fn = L1Loss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
+    # epochs = config.EPOCHS
+    # database_name = "rel-f1"
 
-    train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
+    # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
+
+    node_embeddings = torch.randn((5,2))
+    num_nodes = 5 
+    num_edges = 2 
+    adj_mat =  (torch.randn((5,5)) > 0.5).int()
+
+    model = RelTransformer(node_embeddings, 
+                           config.EMBED_DIM, 
+                           config.NUM_LAYERS, 
+                           config.NUM_HEADS, 
+                           num_nodes, 
+                           num_edges, 
+                           adj_mat, 
+                           config.DROPOUT)
+    
+    # loss_fn = L1Loss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
+    # epochs = config.EPOCHS
+    # database_name = "rel-f1"
+
+    # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
+
+
+
 
 
 if __name__ == "__main__":

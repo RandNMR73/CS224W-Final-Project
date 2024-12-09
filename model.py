@@ -2,17 +2,12 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
-import config
-
-# global params 
-# embed_dim = config[]
-dropout = config['DROPOUT']
 
 # General Architecture Stuff
-# Hyperparams in config file 
 # Include GeLU / GeGLU
-# Add FFN
 # add regularization if needed (we can see based on the training dynamics of model)
+# sharing vs not sharing params for queries and keys 
+# sharing vs not sharing RMSNorm layer
 
 # mixed precision
 
@@ -34,12 +29,12 @@ class MultiHeadAttention(nn.Module):
     """
 
     def __init__(self, 
-                 embed_dim, 
-                 num_heads, 
-                 num_nodes, 
-                 num_edges, 
-                 adj_mat, 
-                 dropout=dropout, 
+                 embed_dim, # config
+                 num_heads, # config
+                 num_nodes, # pass in directly
+                 num_edges, # pass in directly
+                 adj_mat, # pass in directly 
+                 dropout, # config
                  is_hh_att=False, 
                  is_he_att=False, 
                  is_eh_att=False, 
@@ -80,12 +75,16 @@ class MultiHeadAttention(nn.Module):
         self.is_eh_att = is_eh_att 
         self.is_ee_att = is_ee_att 
 
-        self.adj_mat = adj_mat # find where to get adjacency matrix from relbench and pass in as param to constructor (function to convert coo tensor to adj matrix)
+        self.adj_mat = adj_mat # find where to get adjacency matrix from relbench and pass in as param to constructor (function to convert coo tensor to adj matrix) (pass in the coo tensor and do sparse_mm instead of passing adj mat since we don't want to bloat memory either)
         self.shape_proj_1 = nn.Linear(num_edges, num_nodes, bias=False) # find where to get the number of edges and the number of nodes in the graph from relbench (used for making sure that the shapes of the proj matrices match up)
         self.shape_proj_2 = nn.Linear(num_nodes, num_edges, bias=False)
 
     def forward(self, q, k, v):
         """
+        q = node embeddings or edge embeddings
+        k = node embeddings or edge embeddings
+        v = node embeddings 
+
         Calculate the masked attention output for the provided data, computing
         all attention heads in parallel.
 
@@ -108,8 +107,6 @@ class MultiHeadAttention(nn.Module):
         N, E = query.shape
         N, E = value.shape
         H = self.n_head
-        # Create a placeholder, to be overwritten by your code below.
-        output = torch.empty((N, E))
 
         # new modifications 
         if self.is_hh_att:
@@ -134,7 +131,7 @@ class MultiHeadAttention(nn.Module):
         
         # new modifications
         if self.is_hh_att:
-            query = query @ self.adj_mat 
+            query = torch.sparse.mm(query, self.adj_mat)
         
         if self.is_he_att:
             key = self.proj_1(key)
@@ -153,6 +150,15 @@ class MultiHeadAttention(nn.Module):
         output = output.view(N, E)
         return output
 
+# if we want to use later
+class GeGLU(nn.Module):
+    def __init__(self):
+        super(GeGLU, self).__init__()
+
+    def forward(self, x):
+        x, gate = x.chunk(2, dim=-1)
+        return x * F.gelu(gate)
+
 class FeedForward(nn.Module):
     def __init__(self, n_embed):
         super().__init__()
@@ -167,42 +173,63 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 class Block(nn.Module):
-    def __init__(self, n_embed, n_heads):
+    def __init__(self,
+                 embed_dim, # config
+                 num_heads, # config
+                 num_nodes, # pass in directly
+                 num_edges, # pass in directly
+                 adj_mat, # pass in directly 
+                 dropout, # config
+                 ):
+        # n_embed, n_heads, head_size, dropout,
         super().__init__()
-        head_size = n_embed // n_heads 
-        self.sa_hh = MultiHeadAttention(n_heads, head_size, dropout=dropout, is_hh_att=True)  # (N, H, E/H)
-        self.sa_ee = MultiHeadAttention(n_heads, head_size, dropout=dropout, is_ee_att=True)  # (N, H, E/H)
-        self.sa_he = MultiHeadAttention(n_heads, head_size, dropout=dropout, is_he_att=True)  # (N, H, E/H)
-        self.sa_eh = MultiHeadAttention(n_heads, head_size, dropout=dropout, is_eh_att=True)  # (N, H, E/H)
-        self.ffwd = FeedForward(n_embed)
-        self.rmsn1 = nn.RMSNorm(n_embed)
-        self.rmsn2 = nn.RMSNorm(n_embed)
+        head_size = embed_dim // num_heads 
+        self.sa_hh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_hh_att=True)  # (N, H, E/H)
+        self.sa_ee = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_ee_att=True)  # (N, H, E/H)
+        self.sa_he = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_he_att=True)  # (N, H, E/H)
+        self.sa_eh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout, is_eh_att=True)  # (N, H, E/H)
+        self.ffwd = FeedForward(embed_dim)
+        self.rmsn1_n = nn.RMSNorm(embed_dim)
+        self.rmsn1_e = nn.RMSNorm(embed_dim)
+        self.rmsn2 = nn.RMSNorm(embed_dim)
     
-    def forward(self, x):
-        x = self.sa_hh(self.rmsn1(x))+self.sa_ee(self.rmsn1(x))+self.sa_eh(self.rmsn1(x))+self.sa_he(self.rmsn1(x))
+    def forward(self, x_node, x_edge):
+        h = self.rmsn1_n(x_node)
+        e = self.rmsn1_e(x_edge)
+        x = self.sa_hh(h, h, h) + self.sa_ee(e, e, h) + self.sa_eh(e, h, h) + self.sa_he(h, e, h)  # can add gating here 
         x = self.ffwd(self.rmsn2(x))
         return x
 
 class RelTransformer(nn.Module):
-    def __init__(self, num_nodes, num_edges, n_embed):
+    def __init__(self, 
+                 node_embeddings, 
+                 n_embed, # config
+                 num_blocks, # config              
+                 num_heads, # config
+                 num_nodes, # pass in directly
+                 num_edges, # pass in directly
+                 adj_mat, # pass in directly 
+                 dropout):  # config 
         super().__init__()
-        self.node_embeddings = nn.Embedding(num_nodes, n_embed)
+        self.node_embeddings = nn.Parameter(node_embeddings)
+        self.num_nodes = node_embeddings.shape[0]  # N
+        self.n_embed = n_embed 
         self.edge_embeddings = nn.Embedding(num_edges, n_embed)
-        self.blocks = nn.ModuleList(
-            [Block(n_embed, n_heads=4), # add in config file 
-            Block(n_embed, n_heads=4),
-            Block(n_embed, n_heads=4)]
-        )
+        self.num_blocks = num_blocks
+        self.blocks = nn.ModuleList()
+        for _ in range(self.num_blocks):
+            self.blocks.append(Block(n_embed, num_heads, num_nodes, num_edges, adj_mat, dropout)) 
     
-    def forward(self, x):
-        
+    def forward(self):  # pass in node embeddings from subgraph sampling function (make sure that n_embed)
+        out = self.node_embeddings
+        for block in self.blocks:
+            out = block(out, self.edge_embeddings)  # is there something weird about this? potentially, what if we try learning an (n+m) x d tensor instead
+        return out
 
-
-        
 
 # check shapes 
 # stuff to move to train.py:
 # 
 
 # TODOS:
-# Implement Cross Attention Correctly In The Forward Method, Mixed precision, DDP, add stuff to train.py file, figure out how 
+# DDP, add stuff to train.py file, figure out how 

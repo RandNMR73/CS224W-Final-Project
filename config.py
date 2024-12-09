@@ -11,6 +11,10 @@ BATCH_SIZE = 512
 EPOCHS = 10
 EPOCHS_TO_SAVE = 2
 LR = 0.0005
+DROPOUT = 0.1 
+EMBED_DIM = 512
+NUM_HEADS = 8
+NUM_LAYERS = 5  # change this later
 
 CHECKPOINT = False
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
