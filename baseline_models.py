@@ -8,6 +8,7 @@ from torch.nn import Embedding, ModuleDict
 
 from torch_geometric.nn import HeteroConv, LayerNorm, GCNConv, GATConv
 from torch_geometric.typing import EdgeType, NodeType
+import numpy as np
 
 from typing import Any, Dict, List
 
@@ -16,6 +17,8 @@ from torch_geometric.data import HeteroData
 from torch_geometric.nn import MLP
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
+
+import config
 
 class RGCN(torch.nn.Module):
     """
@@ -129,12 +132,93 @@ class HeteroGAT(torch.nn.Module):
 
         return x_dict
 
+def process_hetero_batch(x_dict, batch: HeteroData):
+    node_type_counts = []
+    node_features_dict = {}
+    
+    for node_type, node_counts in batch.num_sampled_nodes_dict.items():
+        if sum(node_counts):
+            cumsum_nodes = torch.cumsum(torch.tensor(node_counts), dim=0)
+            # Extract node features for each hop
+            node_features_hop = {}
+            for hop in range(len(node_counts)):
+                if node_counts[hop]:
+                    start = cumsum_nodes[hop - 1].item() if hop > 0 else 0
+                    end = cumsum_nodes[hop].item()
+                    node_features_hop[hop] = x_dict[node_type][start:end]
+            
+            node_features_dict[node_type] = node_features_hop
+        
+        node_type_counts.append(sum(node_counts))
+    
+    edge_index_dict = {}
+
+    offsets = {}
+    current_offset = 0
+
+    # Compute offsets for node types with non-zero counts
+    for node_type, count in zip(batch.num_sampled_nodes_dict.keys(), node_type_counts):
+        if count > 0:  # Only process node types with nodes
+            offsets[node_type] = current_offset
+            current_offset += count
+
+    num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
+
+    for relation_type, relation_type_hop_counts in batch.num_sampled_edges_dict.items():
+        cumsum_rel_types = torch.cumsum(torch.tensor(relation_type_hop_counts), dim=0)
+        if sum(cumsum_rel_types):
+            # Extract sparse COO tensors for each hop
+            # If there are 2 hops, then length of number of hops is 2
+            # First entry of relation_type_hop_counts is for edges between nodes of hop0 and hop1, etc.
+            rel_type_hop_edge_index = {}
+            for hop in range(len(relation_type_hop_counts)):
+                if relation_type_hop_counts[hop]:
+                    start = cumsum_rel_types[hop - 1] if hop > 0 else 0
+                    end = cumsum_rel_types[hop]
+                    
+                    indices = batch[relation_type].edge_index[:, start:end].clone()  # Edge indices
+                    rel_type_hop_edge_index[hop] = indices
+                            
+            edge_index_dict[relation_type] = rel_type_hop_edge_index
+
+    node_features = []
+    # we need a COO tensor for each hop (each hop corresponds to a separate subgraph)
+    edge_index = [torch.empty((2, 0), dtype=torch.long, device = config.DEVICE) for _ in range(num_hops)]
+    print(offsets)
+    for relation_type, rel_type_hop_edge_index in edge_index_dict.items():
+        print(relation_type, rel_type_hop_edge_index)
+        for hop, hop_edge_index in rel_type_hop_edge_index.items():
+            h_type = relation_type[0]
+            t_type = relation_type[2]
+            h_offset = offsets[h_type]
+            t_offset = offsets[t_type]
+
+            # Add offsets to the current hop's edge_index
+            hop_edge_index = hop_edge_index.clone()  # Ensure no in-place modification
+            hop_edge_index[0] += h_offset
+            hop_edge_index[1] += t_offset
+
+            # Concatenate the new edges to the existing edge_index for the current hop
+            edge_index[hop] = torch.cat((edge_index[hop], hop_edge_index), dim=1)
+             
+            # values = torch.ones(indices.size(1))  # Default values (weights = 1)
+            # sparse_coo_hop = torch.sparse_coo_tensor(
+            #     indices=indices,
+            #     values=values,
+            #     size=(batch[relation_type].size(0), batch[relation_type].size(0)), 
+            #     device = config.DEVICE
+            # )
+        print(edge_index)
+        raise ValueError()
+
+    raise ValueError()
+
 class BaselineModel(torch.nn.Module):
     def __init__(
         self,
         data: HeteroData,
         col_stats_dict: Dict[str, Dict[str, Dict[StatType, Any]]],
-        gnn_layer: str, # RGCN or GAT
+        gnn_layer: str, 
         num_layers: int,
         channels: int,
         out_channels: int,
@@ -209,6 +293,7 @@ class BaselineModel(torch.nn.Module):
         entity_table: NodeType,
     ) -> Tensor:
         seed_time = batch[entity_table].seed_time
+        print(batch.tf_dict)
         x_dict = self.encoder(batch.tf_dict)
 
         rel_time_dict = self.temporal_encoder(
@@ -220,7 +305,7 @@ class BaselineModel(torch.nn.Module):
 
         for node_type, embedding in self.embedding_dict.items():
             x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
-
+        process_hetero_batch(x_dict, batch)
         x_dict = self.gnn(
             x_dict,
             batch.edge_index_dict,
