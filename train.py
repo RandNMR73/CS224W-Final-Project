@@ -175,6 +175,7 @@ def main():
     fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
     use_fused = fused_available and 'cuda' in config.DEVICE
     optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY, fused=use_fused)
+    
     epochs = config.EPOCHS
     database_name = "rel-f1"
 

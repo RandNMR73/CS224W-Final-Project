@@ -135,7 +135,17 @@ class HeteroGAT(torch.nn.Module):
 
 def process_hetero_batch_nodes(x_dict, batch):
     """
-    {node_type: {hop_number : torch.tensor[node embeddings, ...]}, ...}
+    Process the nodes in a heterogeneous batch.
+
+    Args:
+        x_dict (Dict[NodeType, Tensor]): A dictionary mapping node types to their embeddings.
+        batch (HeteroData): The batch containing sampled nodes information.
+
+    Returns:
+        Tuple[List[int], Dict[NodeType, Dict[int, Tensor]], List[int]]:
+            - A list of total node counts for each node type.
+            - A dictionary mapping node types to their features for each hop.
+            - A list of counts of nodes per hop.
     """
     node_type_counts = []  # List to store the total number of nodes for each node type
     node_features_dict = {}  # Dictionary to store node features for each node type and hop
@@ -162,6 +172,16 @@ def process_hetero_batch_nodes(x_dict, batch):
     return node_type_counts, node_features_dict, hop_node_counts
 
 def compute_node_offsets(batch, node_type_counts):
+    """
+    Compute global offsets for node indexing based on the counts of each node type.
+
+    Args:
+        batch (HeteroData): The batch containing sampled nodes information.
+        node_type_counts (List[int]): A list of counts of nodes for each node type.
+
+    Returns:
+        Dict[NodeType, int]: A dictionary mapping node types to their global offsets.
+    """
     # Compute offsets for global node indexing
     offsets = {}  # Dictionary to map node types to their global offset
     current_offset = 0  # Start offset
@@ -174,6 +194,15 @@ def compute_node_offsets(batch, node_type_counts):
     return offsets
 
 def process_hetero_edges(batch):
+    """
+    Process the edges in a heterogeneous batch.
+
+    Args:
+        batch (HeteroData): The batch containing sampled edges information.
+
+    Returns:
+        Dict[EdgeType, Dict[int, Tensor]]: A dictionary mapping relation types to edge indices for each edge type and hop.
+    """
     edge_index_dict = {}  # Dictionary to that maps relation types to edge indices for each edge type and hop
 
     # Extract edge indices for each edge type and hop
@@ -197,6 +226,17 @@ def process_hetero_edges(batch):
     return edge_index_dict
 
 def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
+    """
+    Process a heterogeneous batch of nodes and edges.
+
+    Args:
+        x_dict (Dict[NodeType, Tensor]): A dictionary mapping node types to their embeddings.
+        batch (HeteroData): The batch containing sampled nodes and edges information.
+        emb_dim (int): The dimensionality of the embeddings.
+
+    Returns:
+        None: This function modifies the edge_index in place and does not return a value.
+    """
     node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
     
     offsets = compute_node_offsets(batch, node_type_counts)
