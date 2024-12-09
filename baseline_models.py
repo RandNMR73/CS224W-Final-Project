@@ -143,7 +143,7 @@ def process_hetero_batch_nodes(x_dict, batch):
 
     # Iterate over all node types and their sampled node counts
     for node_type, node_counts in batch.num_sampled_nodes_dict.items():
-        print(node_type, node_counts)
+        # print(node_type, node_counts)
         if sum(node_counts):  # Process only if there are sampled nodes
             cumsum_nodes = torch.cumsum(torch.tensor(node_counts), dim=0)  # Compute cumulative sum of node counts
             node_features_hop = {}  # Dictionary to store features for each hop for the current node type
@@ -158,7 +158,7 @@ def process_hetero_batch_nodes(x_dict, batch):
             node_features_dict[node_type] = node_features_hop  # Store features by hop for this node type
         
         node_type_counts.append(sum(node_counts))  # Total nodes for this node type
-    print(f"hop_node_counts: {hop_node_counts}")
+    # print(f"hop_node_counts: {hop_node_counts}")
     return node_type_counts, node_features_dict, hop_node_counts
 
 def compute_node_offsets(batch, node_type_counts):
@@ -198,17 +198,19 @@ def process_hetero_edges(batch):
 
 def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
-    
+    print(node_type_counts)
+    print(node_features_dict)
+    print(hop_node_counts)
     offsets = compute_node_offsets(batch, node_type_counts)
-
+    print(offsets)
     edge_index_dict = process_hetero_edges(batch)
-
+    print(edge_index_dict)
     # Determine the number of hops (assume all edge types have the same number of hops)
     num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
 
     edge_index = [torch.empty((2, 0), dtype=torch.long, device=config.DEVICE) for _ in range(num_hops)]  # Empty edge index for each hop
     print(node_type_counts)
-    print(edge_index)
+    # print(edge_index)
     #Calculate number of nodes per edge hop (so number of nodes for hops 0 and 1, 1 and 2, etc. since edges are between hops)
     #List of n by d node features for each hop subgrpah
     nodes_per_hop_edge, node_features = [0] * len(edge_index), [0] * len(edge_index)
@@ -216,8 +218,9 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     for i in range(len(nodes_per_hop_edge)):
         nodes_per_hop_edge[i] = hop_node_counts[i] + hop_node_counts[i + 1]
         node_features[i] = torch.zeros((nodes_per_hop_edge[i], emb_dim))
-        print(node_features[i].shape)
-    
+        # print(node_features[i].shape)
+    print(nodes_per_hop_edge)
+    print(offsets)
     # Combine edge indices across all relation types and hops
     for relation_type, rel_type_hop_edge_index in edge_index_dict.items():
         print(relation_type, rel_type_hop_edge_index)  # Debug: Print edge indices for this relation type
@@ -230,13 +233,22 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
 
             # Add offsets to source and target node indices to make them global
             hop_edge_index = hop_edge_index.clone()  # Ensure no in-place modification
-            hop_edge_index[0] += h_offset
-            hop_edge_index[1] += t_offset
+            print(hop_edge_index)
+            hop_edge_index[0] += h_offset 
+            hop_edge_index[1] += t_offset 
 
             # Concatenate the new edges to the existing edge_index for the current hop
             edge_index[hop] = torch.cat((edge_index[hop], hop_edge_index), dim=1)
-    
-    raise ValueError()  # Placeholder: Raise an exception to stop execution
+            print(hop_edge_index[0])
+            print(hop_edge_index[1])
+            for h_node_idx, t_node_idx in zip(hop_edge_index[0], hop_edge_index[1]):
+                if hop in node_features_dict[h_type].keys():
+                    node_features[hop][h_node_idx] = node_features_dict[h_type][hop][h_node_idx - h_offset]
+                if hop in node_features_dict[t_type].keys():
+                    node_features[hop][t_node_idx] = node_features_dict[t_type][hop][t_node_idx - t_offset]
+
+    print(node_features, x_index)
+    return node_features, x_index
 
 class BaselineModel(torch.nn.Module):
     def __init__(
@@ -318,7 +330,7 @@ class BaselineModel(torch.nn.Module):
         entity_table: NodeType,
     ) -> Tensor:
         seed_time = batch[entity_table].seed_time
-        print(batch.tf_dict)
+
         x_dict = self.encoder(batch.tf_dict)
 
         rel_time_dict = self.temporal_encoder(
