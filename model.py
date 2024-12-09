@@ -26,7 +26,8 @@ class MultiHeadAttention(nn.Module):
                  is_hh_att=False, 
                  is_he_att=False, 
                  is_eh_att=False, 
-                 is_ee_att=False):
+                 is_ee_att=False,
+                 is_e_out=False):
         """
         Initializes the MultiHeadAttention module.
 
@@ -57,6 +58,7 @@ class MultiHeadAttention(nn.Module):
 
         self.key_e = nn.Linear(embed_dim, embed_dim, bias=False)
         self.query_e = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.value_e = nn.Linear(embed_dim, embed_dim, bias=False)
         
         self.attn_drop = nn.Dropout(dropout)
 
@@ -69,10 +71,14 @@ class MultiHeadAttention(nn.Module):
         self.is_he_att = is_he_att
         self.is_eh_att = is_eh_att 
         self.is_ee_att = is_ee_att 
+        self.is_e_out = is_e_out  # if the output of the computation gives new edge embeddings
 
         self.adj_mat = adj_mat # find where to get adjacency matrix from relbench and pass in as param to constructor (function to convert coo tensor to adj matrix) (pass in the coo tensor and do sparse_mm instead of passing adj mat since we don't want to bloat memory either)
-        self.shape_proj_1 = nn.Linear(num_edges, num_nodes, bias=False) # find where to get the number of edges and the number of nodes in the graph from relbench (used for making sure that the shapes of the proj matrices match up)
-        self.shape_proj_2 = nn.Linear(num_nodes, num_edges, bias=False)
+        # find where to get the number of edges and the number of nodes in the graph from relbench (used for making sure that the shapes of the proj matrices match up)
+        self.shape_proj_mat_1 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
+        self.shape_proj_mat_2 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
+        nn.init.xavier_uniform_(self.shape_proj_mat_1)
+        nn.init.xavier_uniform_(self.shape_proj_mat_2)
 
     def forward(self, q, k, v):
         """
@@ -106,20 +112,27 @@ class MultiHeadAttention(nn.Module):
         if self.is_ee_att:
             self.query = self.query_e 
             self.key = self.key_e 
-
-        query = self.query(q).view(N, H, E//H) # (N, E) -> (N, H, E/H) -> (N, H, E/H)
-        key = self.key(k).view(N, H, E//H) # (N, E) -> (N, H, E/H) -> (N, H, E/H)
-        value = self.value(v).view(N, H, E//H) # (N, E) -> (N, H, E/H)
         
+        if self.is_e_out:
+            self.value = self.value_e
+        else:
+            self.value = self.value_h 
+
+        query = self.query(q)# (N, E)
+        key = self.key(k) # (N, E)
+        value = self.value(v) # (N, E)
+
         # new modifications
         if self.is_hh_att:
             query = torch.sparse.mm(query, self.adj_mat)
         
         if self.is_he_att:
-            key = self.proj_1(key)
+            key = self.shape_proj_mat_1 @ key 
         
         if self.is_eh_att:
-            key = self.proj_2(key)    
+            key = self.shape_proj_mat_2 @ key  
+        
+        query, key, value = query.view(N, H, E//H), key.view(N, H, E//H), value.view(N, H, E//H) 
         
         # naive attn 
         # qk = torch.matmul(query, key.transpose(2,3))     
@@ -190,7 +203,7 @@ class Block(nn.Module):
                  num_edges, # pass in directly
                  adj_mat, # pass in directly 
                  dropout_att, # config
-                 dropout_ffwd,
+                 dropout_ffwd,  # add to config 
                  ):
         """
         Initializes the Block module, which consists of multiple attention
@@ -207,15 +220,25 @@ class Block(nn.Module):
         """
         # n_embed, n_heads, head_size, dropout,
         super().__init__()
-        head_size = embed_dim // num_heads 
-        self.sa_hh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True)  # (N, H, E/H)
-        self.sa_ee = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True)  # (N, H, E/H)
-        self.sa_he = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True)  # (N, H, E/H)
-        self.sa_eh = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True)  # (N, H, E/H)
-        self.ffwd = FeedForward(embed_dim, dropout_ffwd)
-        self.rmsn1_n = nn.RMSNorm(embed_dim)
+        # head_size = embed_dim // num_heads 
+        self.sa_hh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True)  # (N, H, E/H)
+        self.sa_ee_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True)  # (N, H, E/H)
+        self.sa_he_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True)  # (N, H, E/H)
+        self.sa_eh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True)  # (N, H, E/H)
+
+        self.sa_hh_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True, is_e_out=True)  # (N, H, E/H)
+        self.sa_ee_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True, is_e_out=True)  # (N, H, E/H)
+        self.sa_he_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True, is_e_out=True)  # (N, H, E/H)
+        self.sa_eh_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True, is_e_out=True)  # (N, H, E/H)
+
+
+        self.ffwd_h = FeedForward(embed_dim, dropout_ffwd)
+        self.ffwd_e = FeedForward(embed_dim, dropout_ffwd)
+        
+        self.rmsn1_h = nn.RMSNorm(embed_dim)
         self.rmsn1_e = nn.RMSNorm(embed_dim)
-        self.rmsn2 = nn.RMSNorm(embed_dim)
+        self.rmsn2_h = nn.RMSNorm(embed_dim)
+        self.rmsn2_e = nn.RMSNorm(embed_dim)
     
     def forward(self, x_node, x_edge):
         """
@@ -228,11 +251,14 @@ class Block(nn.Module):
         Returns:
             Tensor: Output tensor after applying attention and feedforward layers.
         """
-        h = self.rmsn1_n(x_node)
+        h = self.rmsn1_h(x_node)
         e = self.rmsn1_e(x_edge)
-        x = self.sa_hh(h, h, h) + self.sa_ee(e, e, h) + self.sa_eh(e, h, h) + self.sa_he(h, e, h)  # can add gating here 
-        x = self.ffwd(self.rmsn2(x))
-        return x
+        x_h = self.sa_hh_h(h, h, h) + self.sa_ee_h(e, e, h) + self.sa_eh_h(e, h, h) + self.sa_he_h(h, e, h)  # can add gating here 
+        x_e = self.sa_hh_e(h, h, h) + self.sa_ee_e(e, e, h) + self.sa_eh_e(e, h, h) + self.sa_he_e(h, e, h)  # can add gating here  # shouldn't be a problem in terms of efficiency but we can check       
+
+        x_h = self.ffwd_h(self.rmsn2_h(x_h))
+        x_e = self.ffwd_e(self.rmsn2_h(x_e))
+        return x_h, x_e 
 
 class RelTransformer(nn.Module):
     def __init__(self, 
@@ -296,10 +322,11 @@ class RelTransformer(nn.Module):
         """
         # pass in x_dict into Gabe's function to get the node embeddings and batch (HeteroData object) into fwd method (look in baseline_models.py)
         self.node_embeddings = process_hetero_batch(x_dict, batch, self.n_embed)
-        out = self.node_embeddings
+        out_h = self.node_embeddings
+        out_e = self.edge_embeddings 
         for block in self.blocks:
-            out = block(out, self.edge_embeddings)  # is there something weird about this? yes! what if we try learning an (n+m) x d tensor instead
-        return out
+            out_h, out_e = block(out_h, out_e)  # is there something weird about this? yes! what if we try learning an (n+m) x d tensor instead
+        return out_h
 
 # TODOS:
 # DDP, add stuff to train.py file, figure out how 
