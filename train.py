@@ -148,12 +148,13 @@ def main():
 
     # # if you try out different RelBench tasks you will need to change these
     # loss_fn = L1Loss()
-    # optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY)
     # epochs = config.EPOCHS
     # database_name = "rel-f1"
 
     # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
 
+    # dummy example (replace with actual RelBench associated stuff)
     node_embeddings = torch.randn((5,2))
     num_nodes = 5 
     num_edges = 2 
@@ -167,17 +168,13 @@ def main():
                            num_edges, 
                            adj_mat, 
                            config.DROPOUT)
-    
-    # loss_fn = L1Loss()
-    # optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
-    # epochs = config.EPOCHS
-    # database_name = "rel-f1"
+       
+    loss_fn = L1Loss()
+    optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY)
+    epochs = config.EPOCHS
+    database_name = "rel-f1"
 
-    # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
-
-
-
-
+    train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
 
 if __name__ == "__main__":
     main()
