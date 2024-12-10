@@ -102,7 +102,7 @@ class HeteroGAT(torch.nn.Module):
                     for edge_type in edge_types
                 },
                 aggr="sum",
-            )
+            ) 
             self.convs.append(conv)
 
         self.norms = torch.nn.ModuleList()
@@ -125,7 +125,7 @@ class HeteroGAT(torch.nn.Module):
         edge_index_dict: Dict[NodeType, Tensor],
         num_sampled_nodes_dict: Optional[Dict[NodeType, List[int]]] = None,
         num_sampled_edges_dict: Optional[Dict[EdgeType, List[int]]] = None,
-    ) -> Dict[NodeType, Tensor]:
+    ) -> Dict[NodeType, Tensor]:            
         for _, (conv, norm_dict) in enumerate(zip(self.convs, self.norms)):
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: norm_dict[key](x) for key, x in x_dict.items()}
@@ -149,7 +149,7 @@ def process_hetero_batch_nodes(x_dict, batch):
     """
     node_type_counts = []  # List to store the total number of nodes for each node type
     node_features_dict = {}  # Dictionary to store node features for each node type and hop
-    hop_node_counts = [0] * len(list(batch.num_sampled_nodes_dict.values())[0])   #Dictionary to track number of nodes per hop
+    hop_node_counts = [0] * len(list(batch.num_sampled_nodes_dict.values())[0])   # Dictionary to track number of nodes per hop
 
     # Iterate over all node types and their sampled node counts
     for node_type, node_counts in batch.num_sampled_nodes_dict.items():
@@ -237,10 +237,12 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     Returns:
         None: This function modifies the edge_index in place and does not return a value.
     """
+    print(f"batch (HeteroData object): {batch}")
+    print(f"x_dict: {x_dict}")
     node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
-    print(node_type_counts)
-    print(node_features_dict)
-    print(hop_node_counts)
+    print(f"node_type_counts: {node_type_counts}")
+    print(f"node_features_dict: {node_features_dict}")
+    print(f"hop_node_counts: {hop_node_counts}")
     offsets = compute_node_offsets(batch, node_type_counts)
     print(offsets)
     edge_index_dict = process_hetero_edges(batch)
@@ -290,6 +292,32 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     print(node_features, x_index)
     return node_features, x_index
 
+def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
+    print(f"hetero edge_index: {batch.edge_index_dict}")
+    for relation_type, edge_index in batch.edge_index_dict.items():
+        if edge_index.size(1) != 0:
+            print(relation_type)
+    homo = batch.to_homogeneous()
+    print(f"homo edge_index: {homo.edge_index}")
+    print(f"homo n_ids: {homo.n_id}")
+    print(f"homo node_type for each node: {homo.node_type}")
+    print(f"unique homo node_types: {torch.unique(homo.node_type)}")
+    print(f"homo node_type max: {max(homo.node_type)}")
+    print(f"homo node_type min: {min(homo.node_type)}")
+    
+    node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(batch.node_types)}
+    print(f"node_idx_to_str:{node_idx_to_str}")
+    node_features = torch.zeros((len(homo.n_id), emb_dim))
+    print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
+    for i, (n_idx, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
+        string_node_type = node_idx_to_str[node_type.item()]
+        # print(f"string_node_type:{string_node_type}")
+        # print(f"n_id: {n_idx}")
+        emb_vector = x_dict[string_node_type][n_idx]
+        node_features[i] = emb_vector
+    print(node_features.shape)
+    return node_features, homo.edge_index 
+        
 class BaselineModel(torch.nn.Module):
     def __init__(
         self,
@@ -382,7 +410,9 @@ class BaselineModel(torch.nn.Module):
 
         for node_type, embedding in self.embedding_dict.items():
             x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
-        process_hetero_batch(x_dict, batch, self.channels)
+
+        process_hetero_batch_vectorized(x_dict, batch, self.channels)
+        raise ValueError()
         x_dict = self.gnn(
             x_dict,
             batch.edge_index_dict,
