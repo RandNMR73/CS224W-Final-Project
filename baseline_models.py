@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn import BCEWithLogitsLoss
 from torch.nn import Embedding, ModuleDict
 
-from torch_geometric.nn import HeteroConv, LayerNorm, GCNConv, GATConv
+from torch_geometric.nn import HeteroConv, LayerNorm, GCNConv, GATConv, SAGEConv
 from torch_geometric.typing import EdgeType, NodeType
 import numpy as np
 
@@ -50,9 +50,7 @@ class RGCN(torch.nn.Module):
         for _ in range(num_layers):
             conv = HeteroConv(
                 {
-                    edge_type: GCNConv(
-                        channels, channels 
-                    )
+                    edge_type: SAGEConv((channels, channels), channels, aggr=aggr)
                     for edge_type in edge_types
                 },
                 aggr="sum",
@@ -493,8 +491,8 @@ class BaselineModel(torch.nn.Module):
         for node_type, embedding in self.embedding_dict.items():
             x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
 
-        process_hetero_batch_vectorized(x_dict, batch, self.channels)
-        raise ValueError()
+        # process_hetero_batch_vectorized(x_dict, batch, self.channels)
+        # raise ValueError()
         x_dict = self.gnn(
             x_dict,
             batch.edge_index_dict,
