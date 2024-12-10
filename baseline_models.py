@@ -13,7 +13,7 @@ import numpy as np
 from typing import Any, Dict, List
 
 from torch_frame.data.stats import StatType
-from torch_geometric.data import HeteroData
+from HeteroData import HeteroData
 from torch_geometric.nn import MLP
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
