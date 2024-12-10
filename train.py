@@ -10,13 +10,17 @@ import random
 import numpy as np
 import config
 import math
+import wandb  # add wandb to docker container 
+import os # add os to container 
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 from baseline_models import BaselineModel
 from dataset import create_task_train_dict
 
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-# from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
+from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
 
@@ -26,7 +30,56 @@ num_heads = config.NUM_HEADS
 dropout = config.DROPOUT
 num_layers = config.NUM_LAYERS
 
+# DDP Notes (note the above code assumes we're operating on a single node):
+# WORLD_SIZE = number of running processes
+# RANK = global identifier for each process 
+# LOCAL_RANK = local identifier for a process on a node (only used in multi-node settings)
+# launch command: torchrun --standalone --nproc_per_node=2 train.py
+# from torch.distributed import init_process_group, destroy_process_group
+
+# # setup
+# ddp = int(os.environ.get('RANK', -1))
+# if ddp:
+#     assert torch.cuda.is_available()
+#     init_process_group(backend='nccl')
+#     ddp_rank = int(os.environ['RANK'])
+#     ddp_local_rank = int(os.environ['LOCAL_RANK'])
+#     ddp_world_size = int(os.environ['WORLD_SIZE'])
+#     device = f'cuda:{ddp_local_rank}'
+#     torch.cuda.set_device(device)  # need to figure out how this fits into config
+#     master_process = ddp_rank == 0
+# else:
+#     # non DDP run
+#     ddp_rank = 0
+#     ddp_local_rank = 0
+#     ddp_world_size = 1
+#     master_process = True 
+#     device = "cuda" if torch.cuda.is_available() else "cpu"
+
 def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer) -> float:
+    """
+    Trains the specified model for one epoch using the provided data loader.
+
+    This function performs a single epoch of training, where the model is updated based on the 
+    input data from the loader. It computes the loss using the specified loss function and 
+    updates the model parameters using the provided optimizer. The training process includes 
+    mixed-precision training for improved performance.
+
+    Args:
+        task: An object representing the task, containing task-specific information such as 
+              the entity table and metrics.
+        entity_table: The table of entities used for calculating the loss during training.
+        model: The neural network model that is being trained.
+        loader: A NeighborLoader instance that provides batches of training data.
+        loss_fn: The loss function used to compute the difference between predicted and actual values.
+        optimizer: The optimizer used to update the model parameters based on the computed gradients.
+
+    Returns:
+        float: The average training loss for the epoch, calculated as the total loss divided by 
+               the number of samples processed.
+    """
+    # if ddp:
+    #     model = DDP(model, device_ids=[ddp_local_rank])
     model.train()
     scaler = GradScaler()
     loss_accum = count_accum = 0
@@ -47,10 +100,31 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
+        wandb.log({"train_loss": loss.item()})
 
     return loss_accum / count_accum
 
 def val(task, entity_table, model, loader: NeighborLoader, loss_fn) -> float:
+    """
+    Validates the model on the provided data loader for one epoch.
+
+    This function evaluates the performance of the model on the validation dataset. It computes 
+    the loss using the specified loss function and collects predictions for further analysis. 
+    The model is set to evaluation mode to disable dropout and batch normalization during validation.
+
+    Args:
+        task: An object representing the task, containing task-specific information such as 
+              the entity table and metrics.
+        entity_table: The table of entities used for calculating the loss during validation.
+        model: The neural network model that is being validated.
+        loader: A NeighborLoader instance that provides batches of validation data.
+        loss_fn: The loss function used to compute the difference between predicted and actual values.
+
+    Returns:
+        float: The average validation loss for the epoch, calculated as the total loss divided by 
+               the number of samples processed.
+        np.ndarray: The predictions made by the model during validation, returned as a NumPy array.
+    """
     model.eval()
 
     pred_list = []
@@ -67,11 +141,28 @@ def val(task, entity_table, model, loader: NeighborLoader, loss_fn) -> float:
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
+        wandb.log({"val_loss": loss.item()})
     
     return loss_accum / count_accum, torch.cat(pred_list, dim = 0).numpy()
 
 @torch.no_grad()
-def test(model, task, loader: NeighborLoader, loss = True) -> np.ndarray:
+def test(model, task, loader: NeighborLoader, loss=True) -> np.ndarray:
+    """
+    Tests the model on the provided data loader without computing gradients.
+
+    This function evaluates the model on the test dataset, collecting predictions without 
+    updating the model parameters. It is useful for assessing the model's performance on unseen 
+    data. The model is set to evaluation mode to ensure consistent behavior during testing.
+
+    Args:
+        model: The neural network model that is being tested.
+        task: An object representing the task, containing task-specific information.
+        loader: A NeighborLoader instance that provides batches of test data.
+        loss (bool): A flag indicating whether to compute the loss during testing (default is True).
+
+    Returns:
+        np.ndarray: The predictions made by the model during testing, returned as a NumPy array.
+    """
     model.eval()
 
     pred_list = []
@@ -86,6 +177,15 @@ def test(model, task, loader: NeighborLoader, loss = True) -> np.ndarray:
     return torch.cat(pred_list, dim=0).numpy()
 
 def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
+    """
+    Trains and validates the model on all tasks specified in the task_to_train_info.
+
+    Args:
+        task_to_train_info: A dictionary containing task information for training.
+        model: The model to be trained and validated.
+        optimizer: The optimizer used for updating model parameters.
+        loss_fn: The loss function used for training and validation.
+    """
     task_epochs = {task: 0 for task in task_to_train_info.keys()}
     state_dict = None
 
@@ -113,6 +213,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
             val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
             val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
             print(f"Task: {random_task}, Epoch: {epoch:02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
+            wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
             
             task_epochs[random_task] += 1
             total_epochs_trained += 1
@@ -133,6 +234,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
                 }, 'checkpoint.pth')
 
 def main():
+    wandb.init(project="")
     hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
 
     # model = BaselineModel(
@@ -175,11 +277,14 @@ def main():
     fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
     use_fused = fused_available and 'cuda' in config.DEVICE
     optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY, fused=use_fused)
-    
+
     epochs = config.EPOCHS
     database_name = "rel-f1"
 
     train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
 
+    wandb.finish()
+
 if __name__ == "__main__":
     main()
+

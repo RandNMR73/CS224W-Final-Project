@@ -14,6 +14,18 @@ from torch_geometric.loader import NeighborLoader
 from text_embeddings import GloveTextEmbedding
 
 import config
+import torch
+
+# DDP dataloader
+class DataLoaderLite:
+    def __init__(self, B, process_rank, num_processes):
+        self.B = B
+        self.process_rank = process_rank 
+        self.num_processes = num_processes 
+        self.current_position = self.B * self.process_rank
+
+    def next_batch(self):
+        pass  
 
 def load_task_dataset(dataset_name, task_name):
     """
@@ -102,6 +114,23 @@ def load_data(hetero_graph, task, train_table, val_table, test_table):
 TaskTrainValInfo = namedtuple("TaskTrainValInfo", ["task", "task_metrics", "loader_dict", 
                                                         "col_stats_dict", "entity_table", "val_table"])
 def create_task_train_dict(dataset_name):
+    """
+    Create a dictionary mapping task names to their training information.
+
+    This function loads the specified dataset, retrieves the heterogeneous graph and column statistics,
+    and then iterates through the tasks associated with the dataset. For each task, it loads the task dataset,
+    prepares the data loaders, and stores the task information in a structured format.
+
+    Args:
+        dataset_name (str): The name of the dataset for which to create the task training dictionary.
+
+    Returns:
+        tuple: A tuple containing:
+            - hetero_graph (HeteroData): The heterogeneous graph representation of the dataset.
+            - col_stats_dict (dict): A dictionary containing column statistics for each table in the dataset.
+            - task_to_train_info (dict): A dictionary mapping task names to their corresponding training information,
+              which includes the task object, metrics, data loaders, column statistics, entity table, and validation table.
+    """
     task_to_train_info = {}
     dataset = get_dataset(dataset_name, download=True)
     hetero_graph, col_stats_dict = get_data_graph(dataset)
