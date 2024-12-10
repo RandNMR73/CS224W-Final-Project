@@ -349,7 +349,11 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     for relation_type, edge_index in batch.edge_index_dict.items():
         if edge_index.size(1) != 0:
             print(relation_type)
+    num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
+    batch.node_featuresset_num(num_node_features)
     homo = batch.to_homogeneous()
+
+    print(f"batch.num_node_features: {batch.num_node_features}")
     print(f"homo edge_index: {homo.edge_index}")
     print(f"homo n_ids: {homo.n_id}")
     print(f"homo node_type for each node: {homo.node_type}")
@@ -368,6 +372,7 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
         emb_vector = x_dict[string_node_type][n_idx]
         node_features[i] = emb_vector
     print(node_features.shape)
+    print(homo.edge_index)
     return node_features, homo.edge_index 
         
 class BaselineModel(torch.nn.Module):

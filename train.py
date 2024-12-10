@@ -10,7 +10,7 @@ import random
 import numpy as np
 import config
 import math
-import wandb  # add wandb to docker container 
+# import wandb  # add wandb to docker container 
 import os # add os to container 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -20,7 +20,7 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
+# from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
 
@@ -100,7 +100,7 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
-        wandb.log({"train_loss": loss.item()})
+        # wandb.log({"train_loss": loss.item()})
 
     return loss_accum / count_accum
 
@@ -141,7 +141,7 @@ def val(task, entity_table, model, loader: NeighborLoader, loss_fn) -> float:
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
-        wandb.log({"val_loss": loss.item()})
+        # wandb.log({"val_loss": loss.item()})
     
     return loss_accum / count_accum, torch.cat(pred_list, dim = 0).numpy()
 
@@ -213,7 +213,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
             val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
             val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
             print(f"Task: {random_task}, Epoch: {epoch:02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
-            wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
+            # wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
             
             task_epochs[random_task] += 1
             total_epochs_trained += 1
@@ -234,56 +234,56 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
                 }, 'checkpoint.pth')
 
 def main():
-    wandb.init(project="")
+    # wandb.init(project="")
     hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
 
-    # model = BaselineModel(
-    #     data=hetero_graph,
-    #     col_stats_dict=col_stats_dict,
-    #     gnn_layer = "HeteroGAT",
-    #     num_layers=2,
-    #     channels=128,
-    #     out_channels=1,
-    #     aggr="sum",
-    #     norm="batch_norm",
-    # ).to(config.DEVICE)
+    model = BaselineModel(
+        data=hetero_graph,
+        col_stats_dict=col_stats_dict,
+        gnn_layer = "HeteroGAT",
+        num_layers=2,
+        channels=128,
+        out_channels=1,
+        aggr="sum",
+        norm="batch_norm",
+    ).to(config.DEVICE)
     # model = torch.compile(model)
 
-    # # if you try out different RelBench tasks you will need to change these
-    # loss_fn = L1Loss()
-    # optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY)
-    # epochs = config.EPOCHS
-    # database_name = "rel-f1"
-
-    # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
-
-    # dummy example (replace with actual RelBench associated stuff)
-    node_embeddings = torch.randn((5,2))
-    num_nodes = 5 
-    num_edges = 2 
-    adj_mat =  (torch.randn((5,5)) > 0.5).int()
-
-    model = RelTransformer(node_embeddings, 
-                           config.EMBED_DIM, 
-                           config.NUM_LAYERS, 
-                           config.NUM_HEADS, 
-                           num_nodes, 
-                           num_edges, 
-                           adj_mat, 
-                           config.DROPOUT)
-       
+    # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
-    # fused AdamW
-    fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-    use_fused = fused_available and 'cuda' in config.DEVICE
-    optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY, fused=use_fused)
-
+    optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY)
     epochs = config.EPOCHS
     database_name = "rel-f1"
 
     train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
 
-    wandb.finish()
+    # dummy example (replace with actual RelBench associated stuff)
+    # node_embeddings = torch.randn((5,2))
+    # num_nodes = 5 
+    # num_edges = 2 
+    # adj_mat =  (torch.randn((5,5)) > 0.5).int()
+
+    # model = RelTransformer(node_embeddings, 
+    #                        config.EMBED_DIM, 
+    #                        config.NUM_LAYERS, 
+    #                        config.NUM_HEADS, 
+    #                        num_nodes, 
+    #                        num_edges, 
+    #                        adj_mat, 
+    #                        config.DROPOUT)
+       
+    # loss_fn = L1Loss()
+    # # fused AdamW
+    # fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
+    # use_fused = fused_available and 'cuda' in config.DEVICE
+    # optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY, fused=use_fused)
+
+    # epochs = config.EPOCHS
+    # database_name = "rel-f1"
+
+    # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
+
+    # wandb.finish()
 
 if __name__ == "__main__":
     main()
