@@ -34,6 +34,16 @@ class RGCN(torch.nn.Module):
         aggr: str = "mean",
         num_layers: int = 2,
     ):
+        """
+        Initialize the RGCN model.
+
+        Args:
+            node_types (List[NodeType]): List of node types in the graph.
+            edge_types (List[EdgeType]): List of edge types in the graph.
+            channels (int): Number of channels for the convolution layers.
+            aggr (str): Aggregation method to use (default is "mean").
+            num_layers (int): Number of layers in the model (default is 2).
+        """
         super().__init__()
 
         self.convs = torch.nn.ModuleList()
@@ -57,6 +67,9 @@ class RGCN(torch.nn.Module):
             self.norms.append(norm_dict)
 
     def reset_parameters(self):
+        """
+        Reset the parameters of the model layers.
+        """
         for conv in self.convs:
             conv.reset_parameters()
         for norm_dict in self.norms:
@@ -70,6 +83,18 @@ class RGCN(torch.nn.Module):
         num_sampled_nodes_dict: Optional[Dict[NodeType, List[int]]] = None,
         num_sampled_edges_dict: Optional[Dict[EdgeType, List[int]]] = None,
     ) -> Dict[NodeType, Tensor]:
+        """
+        Forward pass through the model.
+
+        Args:
+            x_dict (Dict[NodeType, Tensor]): Node features for each node type.
+            edge_index_dict (Dict[NodeType, Tensor]): Edge indices for each node type.
+            num_sampled_nodes_dict (Optional[Dict[NodeType, List[int]]]): Sampled nodes per type.
+            num_sampled_edges_dict (Optional[Dict[EdgeType, List[int]]]): Sampled edges per type.
+
+        Returns:
+            Dict[NodeType, Tensor]: Updated node features after the forward pass.
+        """
         for _, (conv, norm_dict) in enumerate(zip(self.convs, self.norms)):
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: norm_dict[key](x) for key, x in x_dict.items()}
@@ -90,6 +115,17 @@ class HeteroGAT(torch.nn.Module):
         heads: int = 1, 
         num_layers: int = 2,
     ):
+        """
+        Initialize the HeteroGAT model.
+
+        Args:
+            node_types (List[NodeType]): List of node types in the graph.
+            edge_types (List[EdgeType]): List of edge types in the graph.
+            channels (int): Number of channels for the convolution layers.
+            aggr (str): Aggregation method to use (default is "mean").
+            heads (int): Number of attention heads (default is 1).
+            num_layers (int): Number of layers in the model (default is 2).
+        """
         super().__init__()
 
         self.convs = torch.nn.ModuleList()
@@ -113,6 +149,9 @@ class HeteroGAT(torch.nn.Module):
             self.norms.append(norm_dict)
 
     def reset_parameters(self):
+        """
+        Reset the parameters of the model layers.
+        """
         for conv in self.convs:
             conv.reset_parameters()
         for norm_dict in self.norms:
@@ -125,7 +164,19 @@ class HeteroGAT(torch.nn.Module):
         edge_index_dict: Dict[NodeType, Tensor],
         num_sampled_nodes_dict: Optional[Dict[NodeType, List[int]]] = None,
         num_sampled_edges_dict: Optional[Dict[EdgeType, List[int]]] = None,
-    ) -> Dict[NodeType, Tensor]:            
+    ) -> Dict[NodeType, Tensor]:
+        """
+        Forward pass through the model.
+
+        Args:
+            x_dict (Dict[NodeType, Tensor]): Node features for each node type.
+            edge_index_dict (Dict[NodeType, Tensor]): Edge indices for each node type.
+            num_sampled_nodes_dict (Optional[Dict[NodeType, List[int]]]): Sampled nodes per type.
+            num_sampled_edges_dict (Optional[Dict[EdgeType, List[int]]]): Sampled edges per type.
+
+        Returns:
+            Dict[NodeType, Tensor]: Updated node features after the forward pass.
+        """
         for _, (conv, norm_dict) in enumerate(zip(self.convs, self.norms)):
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: norm_dict[key](x) for key, x in x_dict.items()}
@@ -283,6 +334,7 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
             edge_index[hop] = torch.cat((edge_index[hop], hop_edge_index), dim=1)
             print(hop_edge_index[0])
             print(hop_edge_index[1])
+            # SLOW 
             for h_node_idx, t_node_idx in zip(hop_edge_index[0], hop_edge_index[1]):
                 if hop in node_features_dict[h_type].keys():
                     node_features[hop][h_node_idx] = node_features_dict[h_type][hop][h_node_idx - h_offset]
@@ -334,6 +386,21 @@ class BaselineModel(torch.nn.Module):
         # ID awareness
         id_awareness: bool = False,
     ):
+        """
+        Initialize the BaselineModel.
+
+        Args:
+            data (HeteroData): The heterogeneous data for the model.
+            col_stats_dict (Dict[str, Dict[str, Dict[StatType, Any]]]): Column statistics for the model.
+            gnn_layer (str): The type of GNN layer to use ("RGCN" or "HeteroGAT").
+            num_layers (int): Number of layers in the GNN.
+            channels (int): Number of channels for the GNN.
+            out_channels (int): Number of output channels.
+            aggr (str): Aggregation method for the GNN.
+            norm (str): Normalization method for the GNN.
+            shallow_list (List[NodeType], optional): List of node types for shallow embeddings (default is empty).
+            id_awareness (bool, optional): Whether to use ID awareness (default is False).
+        """
         super().__init__()
         self.channels = channels
         self.encoder = HeteroEncoder(
@@ -397,6 +464,16 @@ class BaselineModel(torch.nn.Module):
         batch: HeteroData,
         entity_table: NodeType,
     ) -> Tensor:
+        """
+        Forward pass through the BaselineModel.
+
+        Args:
+            batch (HeteroData): The batch of data for the model.
+            entity_table (NodeType): The entity table to process.
+
+        Returns:
+            Tensor: The output tensor after processing the batch.
+        """
         seed_time = batch[entity_table].seed_time
 
         x_dict = self.encoder(batch.tf_dict)
@@ -428,6 +505,17 @@ class BaselineModel(torch.nn.Module):
         entity_table: NodeType,
         dst_table: NodeType,
     ) -> Tensor:
+        """
+        Forward pass for destination readout.
+
+        Args:
+            batch (HeteroData): The batch of data for the model.
+            entity_table (NodeType): The entity table to process.
+            dst_table (NodeType): The destination table to read from.
+
+        Returns:
+            Tensor: The output tensor after processing the destination readout.
+        """
         if self.id_awareness_emb is None:
             raise RuntimeError(
                 "id_awareness must be set True to use forward_dst_readout"
