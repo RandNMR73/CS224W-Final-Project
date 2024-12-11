@@ -96,6 +96,7 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # batch_scuffed.edge_index_dict = batch.edge_index_dict
         batch_scuffed = HeteroDataBrian(copy.deepcopy(batch))
         batch_scuffed.edge_index_dict = batch.edge_index_dict
+        batch_scuffed.num_nodes_dict = batch.num_nodes_dict
         print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
