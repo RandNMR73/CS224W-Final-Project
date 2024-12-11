@@ -343,6 +343,17 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     print(node_features, x_index)
     return node_features, x_index
 
+
+
+
+def get_num_node_features(self):
+    return self.num_node_features
+
+def set_num_node_features(self, val):
+    self.num_node_features = val
+
+HeteroData.num_node_features = property(get_num_node_features, set_num_node_features)
+
 def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     print(f"hetero edge_index: {batch.edge_index_dict}")
     for relation_type, edge_index in batch.edge_index_dict.items():
@@ -350,10 +361,9 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
             print(relation_type)
     og_num_node_features = batch.num_node_features
     new_num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
-    batch = HeteroDataBrian(batch)
-    batch.set_num_node_features(new_num_node_features)
+    batch.num_node_features = new_num_node_features
     homo = batch.to_homogeneous()
-    batch.set_num_node_features(og_num_node_features)
+    batch.num_node_features = og_num_node_features
 
 
     print(f"batch.num_node_features: {batch.num_node_features}")
