@@ -510,7 +510,7 @@ class BaselineModel(torch.nn.Module):
     def forward(
         self,
         batch: HeteroData,
-        batch_scuffed, 
+        # batch_scuffed, 
         entity_table: NodeType,
     ) -> Tensor:
         """
