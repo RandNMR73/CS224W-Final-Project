@@ -302,7 +302,7 @@ def main():
         aggr="sum",
         norm="batch_norm",
     ).to(config.DEVICE)
-    model = compile(model)
+    # model = compile(model)
 
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()

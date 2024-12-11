@@ -34,6 +34,30 @@ from torch_geometric.utils import (
 
 NodeOrEdgeStorage = Union[NodeStorage, EdgeStorage]
 
+def to_homogeneous_edge_index(
+    data: HeteroData,
+) -> Tuple[Optional[Tensor], Dict[NodeType, Any], Dict[EdgeType, Any]]:
+    r"""Converts a heterogeneous graph into a homogeneous typed graph."""
+    # Record slice information per node type:
+    node_slices = get_node_slices(data.num_nodes_dict)
+
+    # Record edge indices and slice information per edge type:
+    cumsum = 0
+    edge_indices: List[Tensor] = []
+    edge_slices: Dict[EdgeType, Tuple[int, int]] = {}
+    for edge_type, edge_index in data.collect('edge_index', True).items():
+        edge_index = offset_edge_index(node_slices, edge_type, edge_index)
+        edge_indices.append(edge_index)
+        edge_slices[edge_type] = (cumsum, cumsum + edge_index.size(1))
+        cumsum += edge_index.size(1)
+
+    edge_index: Optional[Tensor] = None
+    if len(edge_indices) == 1:  # Memory-efficient `torch.cat`:
+        edge_index = edge_indices[0]
+    elif len(edge_indices) > 1:
+        edge_index = torch.cat(edge_indices, dim=-1)
+
+    return edge_index, node_slices, edge_slices
 
 
 def to_homogeneous(
