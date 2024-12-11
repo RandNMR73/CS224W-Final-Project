@@ -1,4 +1,4 @@
-def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
+def to_homogeneous(batch, node_attrs: Optional[List[str]] = None,
                        edge_attrs: Optional[List[str]] = None,
                        add_node_type: bool = True,
                        add_edge_type: bool = True) -> Data:
@@ -40,7 +40,7 @@ def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
                     if key in ['edge_index', 'adj_t']:
                         continue
                     if isinstance(value, Tensor):
-                        dim = self.__cat_dim__(key, value, store)
+                        dim = batch.__cat_dim__(key, value, store)
                         size = value.size()[:dim] + value.size()[dim + 1:]
                         sizes_dict[key].append(tuple(size))
             return [
@@ -48,12 +48,12 @@ def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
                 if len(sizes) == len(stores) and len(set(sizes)) == 1
             ]
 
-        data = Data(**self._global_store.to_dict())
+        data = Data(**batch._global_store.to_dict())
 
         # Iterate over all node stores and record the slice information:
         node_slices, cumsum = {}, 0
         node_type_names, node_types = [], []
-        for i, (node_type, store) in enumerate(self._node_store_dict.items()):
+        for i, (node_type, store) in enumerate(batch._node_store_dict.items()):
             num_nodes = store.num_nodes
             node_slices[node_type] = (cumsum, cumsum + num_nodes)
             node_type_names.append(node_type)
@@ -71,11 +71,22 @@ def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
 
         # Combine node attributes into a single tensor:
         if node_attrs is None:
-            node_attrs = _consistent_size(self.node_stores)
+            node_attrs = _consistent_size(batch.node_stores)
         for key in node_attrs:
-            values = [store[key] for store in self.node_stores]
-            dim = self.__cat_dim__(key, values[0], self.node_stores[0])
-            value = torch.cat(values, dim) if len(values) > 1 else values[0]
+            values = []
+            for store, node_type in zip(batch.node_stores, node_type_names):
+                if key in store:
+                    values.append(store[key])
+                else:
+                    # If the key is not present in the store, append a zero tensor
+                    # with the same shape as the first value.
+                    values.append(torch.zeros_like(values[0]))
+
+            # Ensure that values are not merged across different node types
+            if len(values) > 1:
+                value = torch.cat(values, dim=0)
+            else:
+                value = values[0]
             data[key] = value
 
         if len([
@@ -87,7 +98,7 @@ def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
         # Iterate over all edge stores and record the slice information:
         edge_slices, cumsum = {}, 0
         edge_indices, edge_type_names, edge_types = [], [], []
-        for i, (edge_type, store) in enumerate(self._edge_store_dict.items()):
+        for i, (edge_type, store) in enumerate(batch._edge_store_dict.items()):
             src, _, dst = edge_type
             num_edges = store.num_edges
             edge_slices[edge_type] = (cumsum, cumsum + num_edges)
@@ -114,10 +125,10 @@ def to_homogeneous(self, batch, node_attrs: Optional[List[str]] = None,
 
         # Combine edge attributes into a single tensor:
         if edge_attrs is None:
-            edge_attrs = _consistent_size(self.edge_stores)
+            edge_attrs = _consistent_size(batch.edge_stores)
         for key in edge_attrs:
-            values = [store[key] for store in self.edge_stores]
-            dim = self.__cat_dim__(key, values[0], self.edge_stores[0])
+            values = [store[key] for store in batch.edge_stores]
+            dim = batch.__cat_dim__(key, values[0], batch.edge_stores[0])
             value = torch.cat(values, dim) if len(values) > 1 else values[0]
             data[key] = value
 
