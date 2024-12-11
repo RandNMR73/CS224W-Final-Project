@@ -390,9 +390,12 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
             print(relation_type)
     og_num_node_features = batch.num_node_features
     new_num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
-    batch.num_node_features = new_num_node_features
+    print(f"new_num_node_features: {new_num_node_features}")
+    batch.num_node_features = new_num_node_features  # NOT SETTING??
+    print(f"batch.num_node_features before to_homogeneous: {batch.num_node_features}")
     homo = batch.to_homogeneous()
     batch.num_node_features = og_num_node_features
+
 
 
     print(f"batch.num_node_features: {batch.num_node_features}")
@@ -409,8 +412,8 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
     for i, (n_idx, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
         string_node_type = node_idx_to_str[node_type.item()]
-        # print(f"string_node_type:{string_node_type}")
-        # print(f"n_id: {n_idx}")
+        print(f"string_node_type:{string_node_type}")
+        print(f"n_id: {n_idx}")
         emb_vector = x_dict[string_node_type][n_idx]
         node_features[i] = emb_vector
     print(node_features.shape)
