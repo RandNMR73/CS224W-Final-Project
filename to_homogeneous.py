@@ -140,23 +140,25 @@
         for key in node_attrs:
             if key in {'ptr'}:
                 continue
-            values = [store[key] for store in batch.node_stores]
-            if isinstance(values[0], TensorFrame):
-                value = torch_frame.cat(values, along='row')
-            else:
-                dim = batch.__cat_dim__(key, values[0], batch.node_stores[0])
-                dim = values[0].dim() + dim if dim < 0 else dim
-                # For two-dimensional features, we allow arbitrary shapes and
-                # pad them with zeros if necessary in case their size doesn't
-                # match:
-                if values[0].dim() == 2 and dim == 0:
-                    _max = max([value.size(-1) for value in values])
-                    for i, v in enumerate(values):
-                        if v.size(-1) < _max:
-                            pad = v.new_zeros(v.size(0), _max - v.size(-1))
-                            values[i] = torch.cat([v, pad], dim=-1)
-                value = torch.cat(values, dim)
-            data[key] = value
+            # Group values by node type to prevent merging across types
+            node_type_values = defaultdict(list)
+            for store, node_type in zip(batch.node_stores, data._node_type_names):
+                node_type_values[node_type].append(store[key])
+            
+            for node_type, values in node_type_values.items():
+                if isinstance(values[0], TensorFrame):
+                    value = torch_frame.cat(values, along='row')
+                else:
+                    dim = batch.__cat_dim__(key, values[0], batch.node_stores[0])
+                    dim = values[0].dim() + dim if dim < 0 else dim
+                    if values[0].dim() == 2 and dim == 0:
+                        _max = max([value.size(-1) for value in values])
+                        for i, v in enumerate(values):
+                            if v.size(-1) < _max:
+                                pad = v.new_zeros(v.size(0), _max - v.size(-1))
+                                values[i] = torch.cat([v, pad], dim=-1)
+                    value = torch.cat(values, dim)
+                data[f"{node_type}_{key}"] = value
 
         if not data.can_infer_num_nodes:
             data.num_nodes = list(node_slices.values())[-1][1]
