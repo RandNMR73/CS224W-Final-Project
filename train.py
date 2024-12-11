@@ -20,7 +20,7 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-from HeteroData import HeteroData 
+# from HeteroData import HeteroData 
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
@@ -88,9 +88,9 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # create scuffed HeteroData object
         print("type(batch):", type(batch))
         print(f"batch edge_index_dict: {batch.edge_index_dict}")
-        attributes = vars(batch)
-        print(f"attributes: {attributes}")
-        batch_scuffed = HeteroData(**attributes)
+        # attributes = vars(batch)
+        # print(f"attributes: {attributes}")
+        # batch_scuffed = HeteroData(**attributes)
         # print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
@@ -98,7 +98,7 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
         pred = model(
             batch,  # needs to be the original HeteroData object 
-            batch_scuffed,
+            # batch_scuffed,
             task.entity_table,
         )
         pred = pred.view(-1) if pred.size(1) == 1 else pred
@@ -187,6 +187,43 @@ def test(model, task, loader: NeighborLoader, loss=True) -> np.ndarray:
         pred_list.append(pred.detach().cpu())
     return torch.cat(pred_list, dim=0).numpy()
 
+def train_val_on_single(train_items, model, optimizer, loss_fn):
+    """
+    Trains and validates the model on single task specified in train_items.
+
+    Args:
+        task_to_train_info: A dictionary containing task information for training.
+        model: The model to be trained and validated.
+        optimizer: The optimizer used for updating model parameters.
+        loss_fn: The loss function used for training and validation.
+    """
+
+    higher_is_better = config.HIGHER_IS_BETTER[train_items.task_metrics[0]]
+    best_val_metric = -math.inf if higher_is_better else math.inf
+    tune_metric = train_items.task_metrics[0].__name__
+    for epoch in range(config.EPOCHS):
+
+        train_loss = train(train_items.task, train_items.entity_table, model, train_items.loader_dict["train"], loss_fn, optimizer)
+        val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
+        val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
+        # print(f"train_items: {train_items}")
+        print(f"Epoch: {epoch :02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
+        # wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
+        
+        if (higher_is_better and val_metrics[tune_metric] > best_val_metric) or (
+            not higher_is_better and val_metrics[tune_metric] < best_val_metric
+        ):
+            best_val_metric = val_metrics[tune_metric]
+            state_dict = copy.deepcopy(model.state_dict())
+        if config.CHECKPOINT and (epoch + 1) % config.EPOCHS_TO_SAVE == 0:
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'training_loss': train_loss,
+                'validation_loss': val_loss,
+            }, 'checkpoint.pth')
+
 def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
     """
     Trains and validates the model on all tasks specified in the task_to_train_info.
@@ -265,8 +302,10 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
     epochs = config.EPOCHS
     database_name = "rel-f1"
+    task_name = "driver-position"
+    train_items = task_to_train_info[task_name]
 
-    train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
+    train_val_on_single(train_items, model, optimizer, loss_fn)
 
     # dummy example (replace with actual RelBench associated stuff)
     # node_embeddings = torch.randn((5,2))
