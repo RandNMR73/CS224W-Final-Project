@@ -346,13 +346,42 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
 
 
 
-def get_num_node_features(self):
-    return self.num_node_features
+def num_node_features_get(self):
+    # Just return the same dictionary that the original property would return
+    return {
+        key: store.num_node_features
+        for key, store in self._node_store_dict.items()
+    }
 
-def set_num_node_features(self, val):
-    self.num_node_features = val
+def num_node_features_set(self, new_features_dict):
+    # new_features_dict should be {node_type: new_num_features}
+    # We'll try to adjust each store.x accordingly.
+    for key, new_num_feats in new_features_dict.items():
+        store = self._node_store_dict[key]
+        
+        # If there is no x, we must create one
+        if store.x is None:
+            # We need to know how many nodes there are to create a new x.
+            # Let's assume store.num_nodes gives us the number of nodes:
+            num_nodes = store.num_nodes
+            # Create a placeholder tensor for the new feature matrix
+            store.x = torch.zeros((num_nodes, new_num_feats))
+        else:
+            # If store.x exists, reshape or recreate it.
+            old_num_feats = store.x.size(1)
+            if new_num_feats > old_num_feats:
+                # Increase the number of features by adding zeros
+                num_nodes = store.x.size(0)
+                new_x = torch.zeros((num_nodes, new_num_feats), dtype=store.x.dtype, device=store.x.device)
+                new_x[:, :old_num_feats] = store.x
+                store.x = new_x
+            elif new_num_feats < old_num_feats:
+                # Decrease the number of features by truncation
+                store.x = store.x[:, :new_num_feats]
+            # If new_num_feats == old_num_feats, nothing needs to be done
 
-HeteroData.num_node_features = property(get_num_node_features, set_num_node_features)
+# Monkey patch the property on HeteroData
+HeteroData.num_node_features = property(num_node_features_get, num_node_features_set)
 
 def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     print(f"hetero edge_index: {batch.edge_index_dict}")
