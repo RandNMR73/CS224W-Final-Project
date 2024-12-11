@@ -466,7 +466,7 @@ class BaselineModel(torch.nn.Module):
     def forward(
         self,
         batch: HeteroData,
-        # batch_scuffed, 
+        batch_scuffed, 
         entity_table: NodeType,
     ) -> Tensor:
         """
@@ -493,9 +493,9 @@ class BaselineModel(torch.nn.Module):
         for node_type, embedding in self.embedding_dict.items():
             x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
 
-        # print(f"batch_scuffed: {batch_scuffed}")
-        # process_hetero_batch_vectorized(x_dict, batch_scuffed, self.channels)
-        # raise ValueError()
+        print(f"batch_scuffed: {batch_scuffed}")
+        process_hetero_batch_vectorized(x_dict, batch_scuffed, self.channels)
+        raise ValueError()
         x_dict = self.gnn(
             x_dict,
             batch.edge_index_dict,

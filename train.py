@@ -20,7 +20,7 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-# from HeteroData import HeteroData 
+from HeteroData import HeteroData 
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
@@ -88,17 +88,17 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # create scuffed HeteroData object
         print("type(batch):", type(batch))
         print(f"batch edge_index_dict: {batch.edge_index_dict}")
-        # attributes = vars(batch)
+        attributes = vars(batch)
         # print(f"attributes: {attributes}")
-        # batch_scuffed = HeteroData(**attributes)
-        # print(f"batch_scuffed: {batch_scuffed}")
+        batch_scuffed = HeteroData(**attributes)
+        print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
         # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
         pred = model(
             batch,  # needs to be the original HeteroData object 
-            # batch_scuffed,
+            batch_scuffed,
             task.entity_table,
         )
         pred = pred.view(-1) if pred.size(1) == 1 else pred
