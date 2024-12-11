@@ -10,6 +10,7 @@ import random
 import numpy as np
 import config
 import math
+import copy
 # import wandb  # add wandb to docker container 
 import os # add os to container 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -20,7 +21,8 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-from HeteroData import HeteroData
+from torch_geometric.data import HeteroData
+from HeteroDataBrian import HeteroDataBrian
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
@@ -88,10 +90,11 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # create scuffed HeteroData object
         print("type(batch):", type(batch))
         print(f"batch edge_index_dict: {batch.edge_index_dict}")
-        attributes = vars(batch)
+        # attributes = vars(batch)
         # print(f"attributes: {attributes}")
-        batch_scuffed = HeteroData(**attributes)
-        batch_scuffed.edge_index_dict = batch.edge_index_dict
+        # batch_scuffed = HeteroData(**attributes)
+        # batch_scuffed.edge_index_dict = batch.edge_index_dict
+        batch_scuffed = HeteroDataBrian(copy.deepcopy(batch))
         print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
