@@ -18,6 +18,7 @@ from torch_geometric.nn import MLP
 from HeteroDataBrian import HeteroDataBrian
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
+from to_homogeneous import to_homogeneous
 
 import config
 import time
@@ -384,17 +385,17 @@ def num_node_features_set(self, new_features_dict):
 HeteroData.num_node_features = property(num_node_features_get, num_node_features_set)
 
 def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
-    print(f"hetero edge_index: {batch.edge_index_dict}")
-    for relation_type, edge_index in batch.edge_index_dict.items():
-        if edge_index.size(1) != 0:
-            print(relation_type)
-    og_num_node_features = batch.num_node_features
-    new_num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
-    print(f"new_num_node_features: {new_num_node_features}")
-    batch.num_node_features = new_num_node_features  # NOT SETTING??
-    print(f"batch.num_node_features before to_homogeneous: {batch.num_node_features}")
-    homo = batch.to_homogeneous()
-    batch.num_node_features = og_num_node_features
+    # print(f"hetero edge_index: {batch.edge_index_dict}")
+    # for relation_type, edge_index in batch.edge_index_dict.items():
+    #     if edge_index.size(1) != 0:
+    #         print(relation_type)
+    # og_num_node_features = batch.num_node_features
+    # new_num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
+    # print(f"new_num_node_features: {new_num_node_features}")
+    # batch.num_node_features = new_num_node_features  # NOT SETTING??
+    # print(f"batch.num_node_features before to_homogeneous: {batch.num_node_features}")
+    homo = to_homogeneous(batch)
+    # batch.num_node_features = og_num_node_features
 
 
 

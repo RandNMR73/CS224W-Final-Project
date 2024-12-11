@@ -22,6 +22,7 @@ from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
 from torch_geometric.data import HeteroData
+from torch_geometric import compile 
 from HeteroDataBrian import HeteroDataBrian
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
@@ -88,8 +89,8 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
     loss_accum = count_accum = 0
     for batch in tqdm(loader):
         # create scuffed HeteroData object
-        print("type(batch):", type(batch))
-        print(f"batch edge_index_dict: {batch.edge_index_dict}")
+        # print("type(batch):", type(batch))
+        # print(f"batch edge_index_dict: {batch.edge_index_dict}")
         # attributes = vars(batch)
         # print(f"attributes: {attributes}")
         # batch_scuffed = HeteroData(**attributes)
@@ -98,7 +99,7 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # batch_scuffed.edge_index_dict = batch.edge_index_dict
         # batch_scuffed.num_nodes_dict = batch.num_nodes_dict
         # print(f"batch_scuffed: {batch_scuffed}")
-        print(f"batch: {batch}")
+        # print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
         # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
@@ -301,7 +302,7 @@ def main():
         aggr="sum",
         norm="batch_norm",
     ).to(config.DEVICE)
-    # model = torch.compile(model)
+    model = compile(model)
 
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
