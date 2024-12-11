@@ -364,7 +364,7 @@ class HeteroData(BaseData, FeatureStore, GraphStore):
         }
         
     @property 
-    def node_featuresset_num(self, num_node_features):
+    def set_num_node_features(self, num_node_features):
         self.num_node_features = num_node_features
 
     @property

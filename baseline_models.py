@@ -348,7 +348,7 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
         if edge_index.size(1) != 0:
             print(relation_type)
     num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
-    batch.node_featuresset_num(num_node_features)
+    batch.set_num_node_features(num_node_features)
     homo = batch.to_homogeneous()
 
     print(f"batch.num_node_features: {batch.num_node_features}")
