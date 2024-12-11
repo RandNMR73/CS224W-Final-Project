@@ -91,6 +91,7 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         attributes = vars(batch)
         # print(f"attributes: {attributes}")
         batch_scuffed = HeteroData(**attributes)
+        batch_scuffed.edge_index_dict = batch.edge_index_dict
         print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
