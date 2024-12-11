@@ -20,6 +20,7 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
+from HeteroData import HeteroData 
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
@@ -84,19 +85,29 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
     scaler = GradScaler()
     loss_accum = count_accum = 0
     for batch in tqdm(loader):
+        # create scuffed HeteroData object
+        print("type(batch):", type(batch))
+        print(f"batch edge_index_dict: {batch.edge_index_dict}")
+        attributes = vars(batch)
+        print(f"attributes: {attributes}")
+        batch_scuffed = HeteroData(**attributes)
+        # print(f"batch_scuffed: {batch_scuffed}")
+        print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
-        with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
-            pred = model(
-                batch,
-                task.entity_table,
-            )
-            pred = pred.view(-1) if pred.size(1) == 1 else pred
-            loss = loss_fn(pred.float(), batch[entity_table].y.float())
-
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
+        pred = model(
+            batch,  # needs to be the original HeteroData object 
+            batch_scuffed,
+            task.entity_table,
+        )
+        pred = pred.view(-1) if pred.size(1) == 1 else pred
+        loss = loss_fn(pred.float(), batch[entity_table].y.float())
+        loss.backward()
+        optimizer.step()
+        # scaler.scale(loss).backward()
+        # scaler.step(optimizer)
+        # scaler.update()
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
@@ -200,6 +211,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
             break
 
         random_task = random.choice(valid_keys)
+        random_task = "driver-position"
         train_items = task_to_train_info[random_task]
 
         higher_is_better = config.HIGHER_IS_BETTER[train_items.task_metrics[0]]
@@ -212,7 +224,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
             train_loss = train(train_items.task, train_items.entity_table, model, train_items.loader_dict["train"], loss_fn, optimizer)
             val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
             val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
-            print(f"Task: {random_task}, Epoch: {epoch:02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
+            print(f"Task: {random_task}, Epoch: {task_epochs[random_task] :02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
             # wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
             
             task_epochs[random_task] += 1
@@ -228,7 +240,6 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
                     'training_loss': train_loss,
                     'validation_loss': val_loss,
                 }, 'checkpoint.pth')
@@ -240,7 +251,7 @@ def main():
     model = BaselineModel(
         data=hetero_graph,
         col_stats_dict=col_stats_dict,
-        gnn_layer = "HeteroGAT",
+        gnn_layer = "RGCN",
         num_layers=2,
         channels=128,
         out_channels=1,
@@ -251,7 +262,7 @@ def main():
 
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr = config.LR, weight_decay=config.WEIGHT_DECAY)
+    optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
     epochs = config.EPOCHS
     database_name = "rel-f1"
 
