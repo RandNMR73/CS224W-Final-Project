@@ -33,9 +33,33 @@ from torch_geometric.utils import (
 )
 
 NodeOrEdgeStorage = Union[NodeStorage, EdgeStorage]
+# Helper functions ############################################################
+
+
+def get_node_slices(num_nodes: Dict[str, int]) -> Dict[str, Tuple[int, int]]:
+    r"""Returns the boundaries of each node type in a graph."""
+    node_slices: Dict[NodeType, Tuple[int, int]] = {}
+    cumsum = 0
+    for node_type, N in num_nodes.items():
+        node_slices[node_type] = (cumsum, cumsum + N)
+        cumsum += N
+    return node_slices
+
+
+def offset_edge_index(
+    node_slices: Dict[NodeType, Tuple[int, int]],
+    edge_type: EdgeType,
+    edge_index: Tensor,
+) -> Tensor:
+    r"""Increases the edge indices by the offsets of source and destination
+    node types."""
+    src, _, dst = edge_type
+    offset = [[node_slices[src][0]], [node_slices[dst][0]]]
+    offset = torch.tensor(offset, device=edge_index.device)
+    return edge_index + offset
 
 def to_homogeneous_edge_index(
-    data: HeteroData,
+    data
 ) -> Tuple[Optional[Tensor], Dict[NodeType, Any], Dict[EdgeType, Any]]:
     r"""Converts a heterogeneous graph into a homogeneous typed graph."""
     # Record slice information per node type:
