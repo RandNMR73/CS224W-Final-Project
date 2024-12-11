@@ -94,17 +94,17 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
         # print(f"attributes: {attributes}")
         # batch_scuffed = HeteroData(**attributes)
         # batch_scuffed.edge_index_dict = batch.edge_index_dict
-        batch_scuffed = HeteroDataBrian(copy.deepcopy(batch))
-        batch_scuffed.edge_index_dict = batch.edge_index_dict
-        batch_scuffed.num_nodes_dict = batch.num_nodes_dict
-        print(f"batch_scuffed: {batch_scuffed}")
+        # batch_scuffed = HeteroDataBrian(copy.deepcopy(batch))
+        # batch_scuffed.edge_index_dict = batch.edge_index_dict
+        # batch_scuffed.num_nodes_dict = batch.num_nodes_dict
+        # print(f"batch_scuffed: {batch_scuffed}")
         print(f"batch: {batch}")
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
         # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
         pred = model(
             batch,  # needs to be the original HeteroData object 
-            batch_scuffed,
+            # batch_scuffed,
             task.entity_table,
         )
         pred = pred.view(-1) if pred.size(1) == 1 else pred

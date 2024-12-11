@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import MLP
+from HeteroDataBrian import HeteroDataBrian
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
 
@@ -347,9 +348,13 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     for relation_type, edge_index in batch.edge_index_dict.items():
         if edge_index.size(1) != 0:
             print(relation_type)
-    num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
-    batch.set_num_node_features(num_node_features)
+    og_num_node_features = batch.num_node_features
+    new_num_node_features = {'constructor_results': 9, 'drivers': 1, 'races': 2, 'standings': 3, 'results': 4, 'constructors': 5, 'qualifying': 6, 'constructor_standings': 7, 'circuits': 8}
+    batch = HeteroDataBrian(batch)
+    batch.set_num_node_features(new_num_node_features)
     homo = batch.to_homogeneous()
+    batch.set_num_node_features(og_num_node_features)
+
 
     print(f"batch.num_node_features: {batch.num_node_features}")
     print(f"homo edge_index: {homo.edge_index}")
