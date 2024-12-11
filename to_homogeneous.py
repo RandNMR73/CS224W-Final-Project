@@ -1,7 +1,11 @@
-def to_homogeneous(batch, node_attrs: Optional[List[str]] = None,
-                       edge_attrs: Optional[List[str]] = None,
-                       add_node_type: bool = True,
-                       add_edge_type: bool = True) -> Data:
+    def to_homogeneous(
+        batch,
+        node_attrs: Optional[List[str]] = None,
+        edge_attrs: Optional[List[str]] = None,
+        add_node_type: bool = True,
+        add_edge_type: bool = True,
+        dummy_values: bool = True,
+    ) -> Data:
         """Converts a :class:`~torch_geometric.data.HeteroData` object to a
         homogeneous :class:`~torch_geometric.data.Data` object.
         By default, all features with same feature dimensionality across
@@ -32,96 +36,130 @@ def to_homogeneous(batch, node_attrs: Optional[List[str]] = None,
                 add the edge-level vector :obj:`edge_type` to the returned
                 :class:`~torch_geometric.data.Data` object.
                 (default: :obj:`True`)
+            dummy_values (bool, optional): If set to :obj:`True`, will fill
+                attributes of remaining types with dummy values.
+                Dummy values are :obj:`NaN` for floating point attributes,
+                and :obj:`-1` for integers. (default: :obj:`True`)
         """
-        def _consistent_size(stores: List[BaseStorage]) -> List[str]:
+        def get_sizes(stores: List[BaseStorage]) -> Dict[str, List[Tuple]]:
             sizes_dict = defaultdict(list)
             for store in stores:
                 for key, value in store.items():
-                    if key in ['edge_index', 'adj_t']:
+                    if key in [
+                            'edge_index', 'edge_label_index', 'adj', 'adj_t'
+                    ]:
                         continue
                     if isinstance(value, Tensor):
                         dim = batch.__cat_dim__(key, value, store)
                         size = value.size()[:dim] + value.size()[dim + 1:]
                         sizes_dict[key].append(tuple(size))
-            return [
-                k for k, sizes in sizes_dict.items()
-                if len(sizes) == len(stores) and len(set(sizes)) == 1
-            ]
+            return sizes_dict
+
+        def fill_dummy_(stores: List[BaseStorage],
+                        keys: Optional[List[str]] = None):
+            sizes_dict = get_sizes(stores)
+
+            if keys is not None:
+                sizes_dict = {
+                    key: sizes
+                    for key, sizes in sizes_dict.items() if key in keys
+                }
+
+            sizes_dict = {
+                key: sizes
+                for key, sizes in sizes_dict.items() if len(set(sizes)) == 1
+            }
+
+            for store in stores:  # Fill stores with dummy features:
+                for key, sizes in sizes_dict.items():
+                    if key not in store:
+                        ref = list(batch.collect(key).values())[0]
+                        dim = batch.__cat_dim__(key, ref, store)
+                        dummy = float('NaN') if ref.is_floating_point() else -1
+                        if isinstance(store, NodeStorage):
+                            dim_size = store.num_nodes
+                        else:
+                            dim_size = store.num_edges
+                        shape = sizes[0][:dim] + (dim_size, ) + sizes[0][dim:]
+                        store[key] = torch.full(shape, dummy, dtype=ref.dtype,
+                                                device=ref.device)
+
+        def _consistent_size(stores: List[BaseStorage]) -> List[str]:
+            sizes_dict = get_sizes(stores)
+            keys = []
+            for key, sizes in sizes_dict.items():
+                # The attribute needs to exist in all types:
+                if len(sizes) != len(stores):
+                    continue
+                # The attributes needs to have the same number of dimensions:
+                lengths = set([len(size) for size in sizes])
+                if len(lengths) != 1:
+                    continue
+                # The attributes needs to have the same size in all dimensions:
+                if len(sizes[0]) != 1 and len(set(sizes)) != 1:
+                    continue
+                keys.append(key)
+
+            # Check for consistent column names in `TensorFrame`:
+            tf_cols = defaultdict(list)
+            for store in stores:
+                for key, value in store.items():
+                    if isinstance(value, TensorFrame):
+                        cols = tuple(chain(*value.col_names_dict.values()))
+                        tf_cols[key].append(cols)
+
+            for key, cols in tf_cols.items():
+                # The attribute needs to exist in all types:
+                if len(cols) != len(stores):
+                    continue
+                # The attributes needs to have the same column names:
+                lengths = set(cols)
+                if len(lengths) != 1:
+                    continue
+                keys.append(key)
+
+            return keys
+
+        if dummy_values:
+            batch = copy.copy(batch)
+            fill_dummy_(batch.node_stores, node_attrs)
+            fill_dummy_(batch.edge_stores, edge_attrs)
+
+        edge_index, node_slices, edge_slices = to_homogeneous_edge_index(batch)
+        device = edge_index.device if edge_index is not None else None
 
         data = Data(**batch._global_store.to_dict())
-
-        # Iterate over all node stores and record the slice information:
-        node_slices, cumsum = {}, 0
-        node_type_names, node_types = [], []
-        for i, (node_type, store) in enumerate(batch._node_store_dict.items()):
-            num_nodes = store.num_nodes
-            node_slices[node_type] = (cumsum, cumsum + num_nodes)
-            node_type_names.append(node_type)
-            cumsum += num_nodes
-
-            if add_node_type:
-                kwargs = {'dtype': torch.long}
-                node_types.append(torch.full((num_nodes, ), i, **kwargs))
-        data._node_type_names = node_type_names
-
-        if len(node_types) > 1:
-            data.node_type = torch.cat(node_types, dim=0)
-        elif len(node_types) == 1:
-            data.node_type = node_types[0]
+        if edge_index is not None:
+            data.edge_index = edge_index
+        data._node_type_names = list(node_slices.keys())
+        data._edge_type_names = list(edge_slices.keys())
 
         # Combine node attributes into a single tensor:
         if node_attrs is None:
             node_attrs = _consistent_size(batch.node_stores)
         for key in node_attrs:
-            values = []
-            for store, node_type in zip(batch.node_stores, node_type_names):
-                if key in store:
-                    values.append(store[key])
-                else:
-                    # If the key is not present in the store, append a zero tensor
-                    # with the same shape as the first value.
-                    values.append(torch.zeros_like(values[0]))
-
-            # Ensure that values are not merged across different node types
-            if len(values) > 1:
-                value = torch.cat(values, dim=0)
+            if key in {'ptr'}:
+                continue
+            values = [store[key] for store in batch.node_stores]
+            if isinstance(values[0], TensorFrame):
+                value = torch_frame.cat(values, along='row')
             else:
-                value = values[0]
+                dim = batch.__cat_dim__(key, values[0], batch.node_stores[0])
+                dim = values[0].dim() + dim if dim < 0 else dim
+                # For two-dimensional features, we allow arbitrary shapes and
+                # pad them with zeros if necessary in case their size doesn't
+                # match:
+                if values[0].dim() == 2 and dim == 0:
+                    _max = max([value.size(-1) for value in values])
+                    for i, v in enumerate(values):
+                        if v.size(-1) < _max:
+                            pad = v.new_zeros(v.size(0), _max - v.size(-1))
+                            values[i] = torch.cat([v, pad], dim=-1)
+                value = torch.cat(values, dim)
             data[key] = value
 
-        if len([
-                key for key in node_attrs
-                if (key in {'x', 'pos', 'batch'} or 'node' in key)
-        ]) == 0 and not add_node_type:
-            data.num_nodes = cumsum
-
-        # Iterate over all edge stores and record the slice information:
-        edge_slices, cumsum = {}, 0
-        edge_indices, edge_type_names, edge_types = [], [], []
-        for i, (edge_type, store) in enumerate(batch._edge_store_dict.items()):
-            src, _, dst = edge_type
-            num_edges = store.num_edges
-            edge_slices[edge_type] = (cumsum, cumsum + num_edges)
-            edge_type_names.append(edge_type)
-            cumsum += num_edges
-
-            kwargs = {'dtype': torch.long, 'device': store.edge_index.device}
-            offset = [[node_slices[src][0]], [node_slices[dst][0]]]
-            offset = torch.tensor(offset, **kwargs)
-            edge_indices.append(store.edge_index + offset)
-            if add_edge_type:
-                edge_types.append(torch.full((num_edges, ), i, **kwargs))
-        data._edge_type_names = edge_type_names
-
-        if len(edge_indices) > 1:
-            data.edge_index = torch.cat(edge_indices, dim=-1)
-        elif len(edge_indices) == 1:
-            data.edge_index = edge_indices[0]
-
-        if len(edge_types) > 1:
-            data.edge_type = torch.cat(edge_types, dim=0)
-        elif len(edge_types) == 1:
-            data.edge_type = edge_types[0]
+        if not data.can_infer_num_nodes:
+            data.num_nodes = list(node_slices.values())[-1][1]
 
         # Combine edge attributes into a single tensor:
         if edge_attrs is None:
@@ -131,5 +169,27 @@ def to_homogeneous(batch, node_attrs: Optional[List[str]] = None,
             dim = batch.__cat_dim__(key, values[0], batch.edge_stores[0])
             value = torch.cat(values, dim) if len(values) > 1 else values[0]
             data[key] = value
+
+        if 'edge_label_index' in batch:
+            edge_label_index_dict = batch.edge_label_index_dict
+            for edge_type, edge_label_index in edge_label_index_dict.items():
+                edge_label_index = edge_label_index.clone()
+                edge_label_index[0] += node_slices[edge_type[0]][0]
+                edge_label_index[1] += node_slices[edge_type[-1]][0]
+                edge_label_index_dict[edge_type] = edge_label_index
+            data.edge_label_index = torch.cat(
+                list(edge_label_index_dict.values()), dim=-1)
+
+        if add_node_type:
+            sizes = [offset[1] - offset[0] for offset in node_slices.values()]
+            sizes = torch.tensor(sizes, dtype=torch.long, device=device)
+            node_type = torch.arange(len(sizes), device=device)
+            data.node_type = node_type.repeat_interleave(sizes)
+
+        if add_edge_type and edge_index is not None:
+            sizes = [offset[1] - offset[0] for offset in edge_slices.values()]
+            sizes = torch.tensor(sizes, dtype=torch.long, device=device)
+            edge_type = torch.arange(len(sizes), device=device)
+            data.edge_type = edge_type.repeat_interleave(sizes)
 
         return data
