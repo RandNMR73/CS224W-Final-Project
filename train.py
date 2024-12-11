@@ -20,7 +20,7 @@ from dataset import create_task_train_dict
 from torch_geometric.loader import NeighborLoader
 
 from model import RelTransformer
-from HeteroData import HeteroData 
+from HeteroData import HeteroData
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training

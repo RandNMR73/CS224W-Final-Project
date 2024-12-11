@@ -1,19 +1,47 @@
 Loading Database object from data/relbench/rel-f1/db...
-Done in 0.10 seconds.
+Done in 0.11 seconds.
 type(batch): <class 'torch_geometric.data.hetero_data.HeteroData'>
-batch edge_index_dict: {('constructor_results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'f2p_circuitId', 'circuits'): tensor([], size=(2, 0), dtype=torch.int64), ('circuits', 'rev_f2p_circuitId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'standings'): tensor([[    0,     1,     2,  ..., 21203, 21204, 21205],
-        [    0,     1,     2,  ..., 21203, 21204, 21205]]), ('standings', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 21203, 21204, 21205],
-        [    0,     0,     0,  ...,   511,   511,   511]]), ('drivers', 'rev_f2p_driverId', 'standings'): tensor([[    0,     0,     0,  ...,   511,   511,   511],
-        [    0,     1,     2,  ..., 21203, 21204, 21205]]), ('results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'results'): tensor([[    0,     1,     3,  ..., 21180, 21189, 21195],
-        [    0,     1,     2,  ..., 18777, 18778, 18779]]), ('results', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 18777, 18778, 18779],
-        [    0,     0,     0,  ...,   511,   511,   511]]), ('drivers', 'rev_f2p_driverId', 'results'): tensor([[    0,     0,     0,  ...,   511,   511,   511],
-        [    0,     1,     2,  ..., 18777, 18778, 18779]]), ('results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'results'): tensor([[    0,     0,     0,  ...,  1397,  1398,  1399],
-        [    0,     1,     2,  ..., 18777, 18778, 18779]]), ('qualifying', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'qualifying'): tensor([[21239, 21240,   551,  ..., 21155, 21156, 21157],
-        [    0,     1,     2,  ...,  1701,  1702,  1703]]), ('qualifying', 'f2p_driverId', 'drivers'): tensor([[   0,    1,    2,  ..., 1701, 1702, 1703],
-        [  13,   13,   13,  ...,  507,  507,  507]]), ('drivers', 'rev_f2p_driverId', 'qualifying'): tensor([[  13,   13,   13,  ...,  507,  507,  507],
-        [   0,    1,    2,  ..., 1701, 1702, 1703]]), ('qualifying', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'qualifying'): tensor([[  34,   34,   34,  ..., 1392, 1392, 1392],
-        [   0,    1,    2,  ..., 1701, 1702, 1703]]), ('constructor_standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_standings', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64)}
+batch edge_index_dict: {('constructor_results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'f2p_circuitId', 'circuits'): tensor([], size=(2, 0), dtype=torch.int64), ('circuits', 'rev_f2p_circuitId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'standings'): tensor([[    0,     1,     2,  ..., 20226, 20227, 20228],
+        [    0,     1,     2,  ..., 20226, 20227, 20228]]), ('standings', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 20226, 20227, 20228],
+        [    0,     0,     0,  ...,   510,   510,   510]]), ('drivers', 'rev_f2p_driverId', 'standings'): tensor([[    0,     0,     0,  ...,   510,   510,   510],
+        [    0,     1,     2,  ..., 20226, 20227, 20228]]), ('results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'results'): tensor([[    0,     1,     2,  ..., 20224, 20225, 20226],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('results', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 17673, 17674, 17675],
+        [    0,     0,     0,  ...,   510,   510,   510]]), ('drivers', 'rev_f2p_driverId', 'results'): tensor([[    0,     0,     0,  ...,   510,   510,   510],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'results'): tensor([[    0,     0,     0,  ...,  1324,  1324,  1324],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('qualifying', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'qualifying'): tensor([[  254,   258,   259,  ..., 19421, 19423, 19424],
+        [    0,     1,     2,  ...,  1724,  1725,  1726]]), ('qualifying', 'f2p_driverId', 'drivers'): tensor([[   0,    1,    2,  ..., 1724, 1725, 1726],
+        [   6,    6,    6,  ...,  488,  488,  488]]), ('drivers', 'rev_f2p_driverId', 'qualifying'): tensor([[   6,    6,    6,  ...,  488,  488,  488],
+        [   0,    1,    2,  ..., 1724, 1725, 1726]]), ('qualifying', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'qualifying'): tensor([[  15,   15,   15,  ..., 1274, 1274, 1274],
+        [   0,    1,    2,  ..., 1724, 1725, 1726]]), ('constructor_standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_standings', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64)}
 batch_scuffed: HeteroData(
+  edge_index_dict={
+    (constructor_results, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, constructor_results)=[2, 0],
+    (constructor_results, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, constructor_results)=[2, 0],
+    (races, f2p_circuitId, circuits)=[2, 0],
+    (circuits, rev_f2p_circuitId, races)=[2, 0],
+    (standings, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, standings)=[2, 20229],
+    (standings, f2p_driverId, drivers)=[2, 20229],
+    (drivers, rev_f2p_driverId, standings)=[2, 20229],
+    (results, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, results)=[2, 17676],
+    (results, f2p_driverId, drivers)=[2, 17676],
+    (drivers, rev_f2p_driverId, results)=[2, 17676],
+    (results, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, results)=[2, 17676],
+    (qualifying, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, qualifying)=[2, 1724],
+    (qualifying, f2p_driverId, drivers)=[2, 1727],
+    (drivers, rev_f2p_driverId, qualifying)=[2, 1727],
+    (qualifying, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, qualifying)=[2, 1727],
+    (constructor_standings, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, constructor_standings)=[2, 0],
+    (constructor_standings, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, constructor_standings)=[2, 0],
+  },
   _global_store={},
   _node_store_dict={
     constructor_results={
@@ -34,37 +62,37 @@ batch_scuffed: HeteroData(
       y=[512],
     },
     races={
-      tf=TensorFrame([21861, 5]),
-      time=[21861],
-      n_id=[21861],
-      batch=[21861],
+      tf=TensorFrame([21321, 5]),
+      time=[21321],
+      n_id=[21321],
+      batch=[21321],
       num_sampled_nodes=[3],
     },
     standings={
-      tf=TensorFrame([21206, 4]),
-      time=[21206],
-      n_id=[21206],
-      batch=[21206],
+      tf=TensorFrame([20229, 4]),
+      time=[20229],
+      n_id=[20229],
+      batch=[20229],
       num_sampled_nodes=[3],
     },
     results={
-      tf=TensorFrame([18780, 11]),
-      time=[18780],
-      n_id=[18780],
-      batch=[18780],
+      tf=TensorFrame([17676, 11]),
+      time=[17676],
+      n_id=[17676],
+      batch=[17676],
       num_sampled_nodes=[3],
     },
     constructors={
-      tf=TensorFrame([1400, 3]),
-      n_id=[1400],
-      batch=[1400],
+      tf=TensorFrame([1326, 3]),
+      n_id=[1326],
+      batch=[1326],
       num_sampled_nodes=[3],
     },
     qualifying={
-      tf=TensorFrame([1704, 3]),
-      time=[1704],
-      n_id=[1704],
-      batch=[1704],
+      tf=TensorFrame([1727, 3]),
+      time=[1727],
+      n_id=[1727],
+      batch=[1727],
       num_sampled_nodes=[3],
     },
     constructor_standings={
@@ -118,18 +146,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, standings)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (standings, f2p_driverId, drivers)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, standings)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (results, f2p_raceId, races)={
@@ -138,18 +166,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (results, f2p_driverId, drivers)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (results, f2p_constructorId, constructors)={
@@ -158,8 +186,8 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (constructors, rev_f2p_constructorId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_raceId, races)={
@@ -168,18 +196,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, qualifying)={
-      edge_index=[2, 1699],
-      e_id=[1699],
+      edge_index=[2, 1724],
+      e_id=[1724],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_driverId, drivers)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, qualifying)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_constructorId, constructors)={
@@ -188,8 +216,8 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (constructors, rev_f2p_constructorId, qualifying)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (constructor_standings, f2p_raceId, races)={
@@ -233,37 +261,37 @@ batch: HeteroData(
     y=[512],
   },
   races={
-    tf=TensorFrame([21861, 5]),
-    time=[21861],
-    n_id=[21861],
-    batch=[21861],
+    tf=TensorFrame([21321, 5]),
+    time=[21321],
+    n_id=[21321],
+    batch=[21321],
     num_sampled_nodes=[3],
   },
   standings={
-    tf=TensorFrame([21206, 4]),
-    time=[21206],
-    n_id=[21206],
-    batch=[21206],
+    tf=TensorFrame([20229, 4]),
+    time=[20229],
+    n_id=[20229],
+    batch=[20229],
     num_sampled_nodes=[3],
   },
   results={
-    tf=TensorFrame([18780, 11]),
-    time=[18780],
-    n_id=[18780],
-    batch=[18780],
+    tf=TensorFrame([17676, 11]),
+    time=[17676],
+    n_id=[17676],
+    batch=[17676],
     num_sampled_nodes=[3],
   },
   constructors={
-    tf=TensorFrame([1400, 3]),
-    n_id=[1400],
-    batch=[1400],
+    tf=TensorFrame([1326, 3]),
+    n_id=[1326],
+    batch=[1326],
     num_sampled_nodes=[3],
   },
   qualifying={
-    tf=TensorFrame([1704, 3]),
-    time=[1704],
-    n_id=[1704],
-    batch=[1704],
+    tf=TensorFrame([1727, 3]),
+    time=[1727],
+    n_id=[1727],
+    batch=[1727],
     num_sampled_nodes=[3],
   },
   constructor_standings={
@@ -315,18 +343,18 @@ batch: HeteroData(
     num_sampled_edges=[2],
   },
   (races, rev_f2p_raceId, standings)={
-    edge_index=[2, 21206],
-    e_id=[21206],
+    edge_index=[2, 20229],
+    e_id=[20229],
     num_sampled_edges=[2],
   },
   (standings, f2p_driverId, drivers)={
-    edge_index=[2, 21206],
-    e_id=[21206],
+    edge_index=[2, 20229],
+    e_id=[20229],
     num_sampled_edges=[2],
   },
   (drivers, rev_f2p_driverId, standings)={
-    edge_index=[2, 21206],
-    e_id=[21206],
+    edge_index=[2, 20229],
+    e_id=[20229],
     num_sampled_edges=[2],
   },
   (results, f2p_raceId, races)={
@@ -335,18 +363,18 @@ batch: HeteroData(
     num_sampled_edges=[2],
   },
   (races, rev_f2p_raceId, results)={
-    edge_index=[2, 18780],
-    e_id=[18780],
+    edge_index=[2, 17676],
+    e_id=[17676],
     num_sampled_edges=[2],
   },
   (results, f2p_driverId, drivers)={
-    edge_index=[2, 18780],
-    e_id=[18780],
+    edge_index=[2, 17676],
+    e_id=[17676],
     num_sampled_edges=[2],
   },
   (drivers, rev_f2p_driverId, results)={
-    edge_index=[2, 18780],
-    e_id=[18780],
+    edge_index=[2, 17676],
+    e_id=[17676],
     num_sampled_edges=[2],
   },
   (results, f2p_constructorId, constructors)={
@@ -355,8 +383,8 @@ batch: HeteroData(
     num_sampled_edges=[2],
   },
   (constructors, rev_f2p_constructorId, results)={
-    edge_index=[2, 18780],
-    e_id=[18780],
+    edge_index=[2, 17676],
+    e_id=[17676],
     num_sampled_edges=[2],
   },
   (qualifying, f2p_raceId, races)={
@@ -365,18 +393,18 @@ batch: HeteroData(
     num_sampled_edges=[2],
   },
   (races, rev_f2p_raceId, qualifying)={
-    edge_index=[2, 1699],
-    e_id=[1699],
+    edge_index=[2, 1724],
+    e_id=[1724],
     num_sampled_edges=[2],
   },
   (qualifying, f2p_driverId, drivers)={
-    edge_index=[2, 1704],
-    e_id=[1704],
+    edge_index=[2, 1727],
+    e_id=[1727],
     num_sampled_edges=[2],
   },
   (drivers, rev_f2p_driverId, qualifying)={
-    edge_index=[2, 1704],
-    e_id=[1704],
+    edge_index=[2, 1727],
+    e_id=[1727],
     num_sampled_edges=[2],
   },
   (qualifying, f2p_constructorId, constructors)={
@@ -385,8 +413,8 @@ batch: HeteroData(
     num_sampled_edges=[2],
   },
   (constructors, rev_f2p_constructorId, qualifying)={
-    edge_index=[2, 1704],
-    e_id=[1704],
+    edge_index=[2, 1727],
+    e_id=[1727],
     num_sampled_edges=[2],
   },
   (constructor_standings, f2p_raceId, races)={
@@ -411,6 +439,34 @@ batch: HeteroData(
   }
 )
 batch_scuffed: HeteroData(
+  edge_index_dict={
+    (constructor_results, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, constructor_results)=[2, 0],
+    (constructor_results, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, constructor_results)=[2, 0],
+    (races, f2p_circuitId, circuits)=[2, 0],
+    (circuits, rev_f2p_circuitId, races)=[2, 0],
+    (standings, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, standings)=[2, 20229],
+    (standings, f2p_driverId, drivers)=[2, 20229],
+    (drivers, rev_f2p_driverId, standings)=[2, 20229],
+    (results, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, results)=[2, 17676],
+    (results, f2p_driverId, drivers)=[2, 17676],
+    (drivers, rev_f2p_driverId, results)=[2, 17676],
+    (results, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, results)=[2, 17676],
+    (qualifying, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, qualifying)=[2, 1724],
+    (qualifying, f2p_driverId, drivers)=[2, 1727],
+    (drivers, rev_f2p_driverId, qualifying)=[2, 1727],
+    (qualifying, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, qualifying)=[2, 1727],
+    (constructor_standings, f2p_raceId, races)=[2, 0],
+    (races, rev_f2p_raceId, constructor_standings)=[2, 0],
+    (constructor_standings, f2p_constructorId, constructors)=[2, 0],
+    (constructors, rev_f2p_constructorId, constructor_standings)=[2, 0],
+  },
   _global_store={},
   _node_store_dict={
     constructor_results={
@@ -431,37 +487,37 @@ batch_scuffed: HeteroData(
       y=[512],
     },
     races={
-      tf=TensorFrame([21861, 5]),
-      time=[21861],
-      n_id=[21861],
-      batch=[21861],
+      tf=TensorFrame([21321, 5]),
+      time=[21321],
+      n_id=[21321],
+      batch=[21321],
       num_sampled_nodes=[3],
     },
     standings={
-      tf=TensorFrame([21206, 4]),
-      time=[21206],
-      n_id=[21206],
-      batch=[21206],
+      tf=TensorFrame([20229, 4]),
+      time=[20229],
+      n_id=[20229],
+      batch=[20229],
       num_sampled_nodes=[3],
     },
     results={
-      tf=TensorFrame([18780, 11]),
-      time=[18780],
-      n_id=[18780],
-      batch=[18780],
+      tf=TensorFrame([17676, 11]),
+      time=[17676],
+      n_id=[17676],
+      batch=[17676],
       num_sampled_nodes=[3],
     },
     constructors={
-      tf=TensorFrame([1400, 3]),
-      n_id=[1400],
-      batch=[1400],
+      tf=TensorFrame([1326, 3]),
+      n_id=[1326],
+      batch=[1326],
       num_sampled_nodes=[3],
     },
     qualifying={
-      tf=TensorFrame([1704, 3]),
-      time=[1704],
-      n_id=[1704],
-      batch=[1704],
+      tf=TensorFrame([1727, 3]),
+      time=[1727],
+      n_id=[1727],
+      batch=[1727],
       num_sampled_nodes=[3],
     },
     constructor_standings={
@@ -515,18 +571,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, standings)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (standings, f2p_driverId, drivers)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, standings)={
-      edge_index=[2, 21206],
-      e_id=[21206],
+      edge_index=[2, 20229],
+      e_id=[20229],
       num_sampled_edges=[2],
     },
     (results, f2p_raceId, races)={
@@ -535,18 +591,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (results, f2p_driverId, drivers)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (results, f2p_constructorId, constructors)={
@@ -555,8 +611,8 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (constructors, rev_f2p_constructorId, results)={
-      edge_index=[2, 18780],
-      e_id=[18780],
+      edge_index=[2, 17676],
+      e_id=[17676],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_raceId, races)={
@@ -565,18 +621,18 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (races, rev_f2p_raceId, qualifying)={
-      edge_index=[2, 1699],
-      e_id=[1699],
+      edge_index=[2, 1724],
+      e_id=[1724],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_driverId, drivers)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (drivers, rev_f2p_driverId, qualifying)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (qualifying, f2p_constructorId, constructors)={
@@ -585,8 +641,8 @@ batch_scuffed: HeteroData(
       num_sampled_edges=[2],
     },
     (constructors, rev_f2p_constructorId, qualifying)={
-      edge_index=[2, 1704],
-      e_id=[1704],
+      edge_index=[2, 1727],
+      e_id=[1727],
       num_sampled_edges=[2],
     },
     (constructor_standings, f2p_raceId, races)={
@@ -611,3 +667,26 @@ batch_scuffed: HeteroData(
     },
   }
 )
+hetero edge_index: {('constructor_results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_results'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'f2p_circuitId', 'circuits'): tensor([], size=(2, 0), dtype=torch.int64), ('circuits', 'rev_f2p_circuitId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'standings'): tensor([[    0,     1,     2,  ..., 20226, 20227, 20228],
+        [    0,     1,     2,  ..., 20226, 20227, 20228]]), ('standings', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 20226, 20227, 20228],
+        [    0,     0,     0,  ...,   510,   510,   510]]), ('drivers', 'rev_f2p_driverId', 'standings'): tensor([[    0,     0,     0,  ...,   510,   510,   510],
+        [    0,     1,     2,  ..., 20226, 20227, 20228]]), ('results', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'results'): tensor([[    0,     1,     2,  ..., 20224, 20225, 20226],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('results', 'f2p_driverId', 'drivers'): tensor([[    0,     1,     2,  ..., 17673, 17674, 17675],
+        [    0,     0,     0,  ...,   510,   510,   510]]), ('drivers', 'rev_f2p_driverId', 'results'): tensor([[    0,     0,     0,  ...,   510,   510,   510],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('results', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'results'): tensor([[    0,     0,     0,  ...,  1324,  1324,  1324],
+        [    0,     1,     2,  ..., 17673, 17674, 17675]]), ('qualifying', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'qualifying'): tensor([[  254,   258,   259,  ..., 19421, 19423, 19424],
+        [    0,     1,     2,  ...,  1724,  1725,  1726]]), ('qualifying', 'f2p_driverId', 'drivers'): tensor([[   0,    1,    2,  ..., 1724, 1725, 1726],
+        [   6,    6,    6,  ...,  488,  488,  488]]), ('drivers', 'rev_f2p_driverId', 'qualifying'): tensor([[   6,    6,    6,  ...,  488,  488,  488],
+        [   0,    1,    2,  ..., 1724, 1725, 1726]]), ('qualifying', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'qualifying'): tensor([[  15,   15,   15,  ..., 1274, 1274, 1274],
+        [   0,    1,    2,  ..., 1724, 1725, 1726]]), ('constructor_standings', 'f2p_raceId', 'races'): tensor([], size=(2, 0), dtype=torch.int64), ('races', 'rev_f2p_raceId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64), ('constructor_standings', 'f2p_constructorId', 'constructors'): tensor([], size=(2, 0), dtype=torch.int64), ('constructors', 'rev_f2p_constructorId', 'constructor_standings'): tensor([], size=(2, 0), dtype=torch.int64)}
+('races', 'rev_f2p_raceId', 'standings')
+('standings', 'f2p_driverId', 'drivers')
+('drivers', 'rev_f2p_driverId', 'standings')
+('races', 'rev_f2p_raceId', 'results')
+('results', 'f2p_driverId', 'drivers')
+('drivers', 'rev_f2p_driverId', 'results')
+('constructors', 'rev_f2p_constructorId', 'results')
+('races', 'rev_f2p_raceId', 'qualifying')
+('qualifying', 'f2p_driverId', 'drivers')
+('drivers', 'rev_f2p_driverId', 'qualifying')
+('constructors', 'rev_f2p_constructorId', 'qualifying')

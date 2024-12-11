@@ -363,7 +363,6 @@ class HeteroData(BaseData, FeatureStore, GraphStore):
             for key, store in self._node_store_dict.items()
         }
         
-    @property 
     def set_num_node_features(self, num_node_features):
         self.num_node_features = num_node_features
 
