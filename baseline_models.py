@@ -399,26 +399,26 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
 
 
 
-    print(f"batch.num_node_features: {batch.num_node_features}")
-    print(f"homo edge_index: {homo.edge_index}")
-    print(f"homo n_ids: {homo.n_id}")
-    print(f"homo node_type for each node: {homo.node_type}")
-    print(f"unique homo node_types: {torch.unique(homo.node_type)}")
-    print(f"homo node_type max: {max(homo.node_type)}")
-    print(f"homo node_type min: {min(homo.node_type)}")
+    # print(f"batch.num_node_features: {batch.num_node_features}")
+    # print(f"homo edge_index: {homo.edge_index}")
+    # print(f"homo n_ids: {homo.n_id}")
+    # print(f"homo node_type for each node: {homo.node_type}")
+    # print(f"unique homo node_types: {torch.unique(homo.node_type)}")
+    # print(f"homo node_type max: {max(homo.node_type)}")
+    # print(f"homo node_type min: {min(homo.node_type)}")
     
     node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(batch.node_types)}
-    print(f"node_idx_to_str:{node_idx_to_str}")
+    # print(f"node_idx_to_str:{node_idx_to_str}")
     node_features = torch.zeros((len(homo.n_id), emb_dim))
-    print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
+    # print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
     for i, (n_idx, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
         string_node_type = node_idx_to_str[node_type.item()]
-        print(f"string_node_type:{string_node_type}")
-        print(f"n_id: {n_idx}")
+        # print(f"string_node_type:{string_node_type}")
+        # print(f"n_id: {n_idx}")
         emb_vector = x_dict[string_node_type][n_idx]
         node_features[i] = emb_vector
-    print(node_features.shape)
-    print(homo.edge_index)
+    # print(node_features.shape)
+    # print(homo.edge_index)
     return node_features, homo.edge_index 
         
 class BaselineModel(torch.nn.Module):
