@@ -400,9 +400,9 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     # homo = to_homogeneous(batch)
     # print(f"homo.node_type: {homo.node_type}")
     homo = batch.to_homogeneous()
-    print(f"type(homo): {type(homo)}")
-    print(f"homo.x: {homo.x}")
-    print(f"homo.edge_index: {homo.edge_index}")
+    # print(f"type(homo): {type(homo)}")
+    # print(f"homo.x: {homo.x}")
+    # print(f"homo.edge_index: {homo.edge_index}")
     # print(f"homo.n_id: {homo.n_id}")
     # batch.num_node_features = og_num_node_features
     
@@ -413,17 +413,25 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     # print(f"unique homo node_types: {torch.unique(homo.node_type)}")
     # print(f"homo node_type max: {max(homo.node_type)}")
     # print(f"homo node_type min: {min(homo.node_type)}")
+
+    print(f"batch.num_node_features: {batch.num_node_features}")
+    print(f"homo.n_id: {homo.n_id}")
+    node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
+    print(f"node_type_counts: {node_type_counts}")
     
     node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(homo.node_type)}
-    print(f"homo.node_type: {homo.node_type}")
+    # print(f"node_idx_to_str: {node_idx_to_str}")
+    # print(f"homo.n_id: {homo.n_id}")
+    print(f"homo.node_type: {homo.node_type[500:513]}")
     # print(f"node_idx_to_str:{node_idx_to_str}")
     node_features = torch.zeros((len(homo.n_id), emb_dim))
     # print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
     for i, (n_idx, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
+        print(f"node_type.item(): {node_type.item()}")
         string_node_type = node_idx_to_str[node_type.item()]
         # print(f"string_node_type:{string_node_type}")
         # print(f"n_id: {n_idx}")
-        print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")
+        print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")  # ERROR
         emb_vector = x_dict[string_node_type][n_idx]
         node_features[i] = emb_vector
     # print(node_features.shape)
