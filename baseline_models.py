@@ -394,11 +394,18 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     # print(f"new_num_node_features: {new_num_node_features}")
     # batch.num_node_features = new_num_node_features  # NOT SETTING??
     # print(f"batch.num_node_features before to_homogeneous: {batch.num_node_features}")
-    homo = to_homogeneous(batch)
+    # print(f"batch.n_id: {batch.n_id}")
+    # print(type(batch))
+    # print(f"batch.n_id: {batch.n_id}")
+    # homo = to_homogeneous(batch)
+    # print(f"homo.node_type: {homo.node_type}")
+    homo = batch.to_homogeneous()
+    print(f"type(homo): {type(homo)}")
+    print(f"homo.x: {homo.x}")
+    print(f"homo.edge_index: {homo.edge_index}")
+    # print(f"homo.n_id: {homo.n_id}")
     # batch.num_node_features = og_num_node_features
-
-
-
+    
     # print(f"batch.num_node_features: {batch.num_node_features}")
     # print(f"homo edge_index: {homo.edge_index}")
     # print(f"homo n_ids: {homo.n_id}")
@@ -415,6 +422,7 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
         string_node_type = node_idx_to_str[node_type.item()]
         # print(f"string_node_type:{string_node_type}")
         # print(f"n_id: {n_idx}")
+        print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")
         emb_vector = x_dict[string_node_type][n_idx]
         node_features[i] = emb_vector
     # print(node_features.shape)
