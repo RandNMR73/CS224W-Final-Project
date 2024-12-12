@@ -414,7 +414,8 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     # print(f"homo node_type max: {max(homo.node_type)}")
     # print(f"homo node_type min: {min(homo.node_type)}")
     
-    node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(batch.node_types)}
+    node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(homo.node_type)}
+    print(f"homo.node_type: {homo.node_type}")
     # print(f"node_idx_to_str:{node_idx_to_str}")
     node_features = torch.zeros((len(homo.n_id), emb_dim))
     # print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
