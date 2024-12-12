@@ -248,7 +248,7 @@ def compute_node_offsets(batch, node_type_counts):
     offsets = {}  # Dictionary to map node types to their global offset
     current_offset = 0  # Start offset
 
-    for node_type, count in zip(batch.num_sampled_nodes_dict.keys(), node_type_counts):
+    for node_type, count in node_type_counts.items():
         if count > 0:  # Only process node types with non-zero nodes
             offsets[node_type] = current_offset  # Assign current offset to the node type
             current_offset += count  # Update offset for the next node type
@@ -269,8 +269,12 @@ def process_hetero_edges(batch):
 
     # Extract edge indices for each edge type and hop
     for relation_type, relation_type_hop_counts in batch.num_sampled_edges_dict.items():
+        
         cumsum_rel_types = torch.cumsum(torch.tensor(relation_type_hop_counts), dim=0)  # Cumulative edge counts
         if sum(cumsum_rel_types):  # Process only if there are edges
+            print(relation_type_hop_counts)
+            print(cumsum_rel_types)
+            print(relation_type, relation_type_hop_counts)
             rel_type_hop_edge_index = {}  # Dictionary to store edge indices for each hop
             
             # Extract edges for each hop
@@ -280,8 +284,7 @@ def process_hetero_edges(batch):
                     end = cumsum_rel_types[hop]  # End index for this hop
                     
                     # Slice the edge index tensor for this hop
-                    indices = batch[relation_type].edge_index[:, start:end].clone()  # Clone to avoid in-place modification
-                    rel_type_hop_edge_index[hop] = indices  # Store edge indices for this hop
+                    rel_type_hop_edge_index[hop] = batch[relation_type].edge_index[:, start:end].clone()  # Clone to avoid in-place modification
             
             edge_index_dict[relation_type] = rel_type_hop_edge_index  # Store edges by hop for this relation type
     
@@ -313,10 +316,9 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     # Determine the number of hops (assume all edge types have the same number of hops)
     #TODO: CHANGE TO K
     num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
-    raise ValueError()
     edge_index = [torch.empty((2, 0), dtype=torch.long, device=config.DEVICE) for _ in range(num_hops)]  # Empty edge index for each hop
-    print(node_type_counts)
-    # print(edge_index)
+    print(f"num_hops: {num_hops}")
+    print(f"edge_index: {edge_index}")
     #Calculate number of nodes per edge hop (so number of nodes for hops 0 and 1, 1 and 2, etc. since edges are between hops)
     #List of n by d node features for each hop subgraph
     nodes_per_hop_edge, node_features = [0] * len(edge_index), [0] * len(edge_index)
@@ -324,9 +326,11 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     for i in range(len(nodes_per_hop_edge)):
         nodes_per_hop_edge[i] = hop_node_counts[i] + hop_node_counts[i + 1]
         node_features[i] = torch.zeros((nodes_per_hop_edge[i], emb_dim))
+        
         # print(node_features[i].shape)
-    print(nodes_per_hop_edge)
+    print(f"nodes_per_hop_edge:{nodes_per_hop_edge}")
     print(offsets)
+    bad_ct = 0
     # Combine edge indices across all relation types and hops
     for relation_type, rel_type_hop_edge_index in edge_index_dict.items():
         print(relation_type, rel_type_hop_edge_index)  # Debug: Print edge indices for this relation type
@@ -336,13 +340,13 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
 
         for hop, hop_edge_index in rel_type_hop_edge_index.items():
             
-            h_offset = offsets[h_type]  # Global offset for source nodes
-            t_offset = offsets[t_type]  # Global offset for target nodes
+            h_offset = offsets[h_type]  # Global offset for target nodes
 
             # Add offsets to source and target node indices to make them global
             hop_edge_index = hop_edge_index.clone()  # Ensure no in-place modification
             print(hop_edge_index)
-            hop_edge_index[0] += h_offset 
+            hop_edge_index[0] += h_offset # offset for source nodes
+            t_offset = offsets[t_type]  # Globa
             hop_edge_index[1] += t_offset 
 
             # Concatenate the new edges to the existing edge_index for the current hop
@@ -351,9 +355,38 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
             print(hop_edge_index[1])
             # SLOW 
             for h_node_idx, t_node_idx in zip(hop_edge_index[0], hop_edge_index[1]):
-                if hop in node_features_dict[h_type].keys():
-                    node_features[hop][h_node_idx] = node_features_dict[h_type][hop][h_node_idx - h_offset]
-                if hop in node_features_dict[t_type].keys():
+                if node_features_dict[h_type][hop].size(0):
+                    if h_node_idx >= node_features[hop].shape[0]:
+                        bad_ct += 1
+                        print(f"bad_ct: {bad_ct}")
+                    else:
+                        try:
+                            # Attempt to access the element
+                            node_features[hop][h_node_idx] = node_features_dict[h_type][hop][h_node_idx - h_offset]
+                        except IndexError as e:
+                            # Print debugging information
+                            print("IndexError encountered!")
+                            print(f"hop: {hop}")
+                            print(f"h_node_idx: {h_node_idx}")
+                            print(f"h_offset: {h_offset}")
+                            print(f"node_features: {node_features}")
+                            print(f"Calculated index: {h_node_idx - h_offset}")
+                            print(f"node_features_dict[h_type][hop] shape: {node_features_dict[h_type][hop].shape}")
+                            print(f"node_features shape: {node_features[hop].shape}")
+                            print(f"hop_edge_index[0]: {hop_edge_index[0]}")
+                            
+                            # Terminate the program
+                            raise  # Re-raise the exception after logging information
+
+                if node_features_dict[t_type][hop].size(0):
+                    # print("ARGAGASDFSAFDSAF")
+                    # print(node_features)
+                    # print(hop)
+                    # print(t_node_idx)
+                    # print(t_offset)
+                    # print(node_features_dict[t_type])
+                    # print(node_features_dict[t_type][hop].size())
+                    # print(node_features_dict[t_type][hop][t_node_idx - t_offset])
                     node_features[hop][t_node_idx] = node_features_dict[t_type][hop][t_node_idx - t_offset]
 
     print(node_features, x_index)
