@@ -399,6 +399,16 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
     # print(f"batch.n_id: {batch.n_id}")
     # homo = to_homogeneous(batch)
     # print(f"homo.node_type: {homo.node_type}")
+
+    # For heterogeneous batch
+    hetero_node_counts = {
+        node_type: batch[node_type].num_nodes
+        for node_type in batch.node_types
+    }
+
+    print("Heterogeneous node counts before to_homogeneous:", hetero_node_counts)
+    print(f"x_dict keys: {x_dict}")
+
     homo = batch.to_homogeneous()
     # print(f"type(homo): {type(homo)}")
     # print(f"homo.x: {homo.x}")
@@ -416,27 +426,50 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
 
     print(f"batch.num_node_features: {batch.num_node_features}")
     print(f"homo.n_id: {homo.n_id}")
-    node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
-    print(f"node_type_counts: {node_type_counts}")
+
+    # For heterogeneous batch
+    hetero_node_counts = {
+        node_type: batch[node_type].num_nodes
+        for node_type in batch.node_types
+    }
+
+    # For homogeneous graph
+    homo_node_types, homo_node_counts = torch.unique(homo.node_type, return_counts=True)
+    homo_node_counts_dict = {
+        batch.node_types[type_idx.item()]: count.item()
+        for type_idx, count in zip(homo_node_types, homo_node_counts)
+    }
+
+    print("Heterogeneous node counts:", hetero_node_counts)
+    print("Homogeneous node counts:", homo_node_counts_dict)
     
-    node_idx_to_str = {i: str_node_type for i, str_node_type in enumerate(homo.node_type)}
+    # maps batch_id to node_type string
+    orig_id_to_str = {orig_id: str_node_type for orig_id, str_node_type in enumerate(homo.node_type)}  
     # print(f"node_idx_to_str: {node_idx_to_str}")
     # print(f"homo.n_id: {homo.n_id}")
     print(f"homo.node_type: {homo.node_type[500:513]}")
     # print(f"node_idx_to_str:{node_idx_to_str}")
+    print(f"len(homo.n_id): {len(homo.n_id)}")
     node_features = torch.zeros((len(homo.n_id), emb_dim))
     # print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
-    for i, (n_idx, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
+    for orig_id, (new_id, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
         print(f"node_type.item(): {node_type.item()}")
-        string_node_type = node_idx_to_str[node_type.item()]
+        string_node_type = orig_id_to_str[node_type.item()]
         # print(f"string_node_type:{string_node_type}")
         # print(f"n_id: {n_idx}")
-        print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")  # ERROR
-        emb_vector = x_dict[string_node_type][n_idx]
-        node_features[i] = emb_vector
+        # print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")  # ERROR
+        emb_vector = x_dict[string_node_type][new_id]
+        node_features[orig_id] = emb_vector
     # print(node_features.shape)
     # print(homo.edge_index)
     return node_features, homo.edge_index 
+
+def process_hetero_batch_new(x_dict, batch: HeteroData, emb_dim):
+    homo = batch.to_homogeneous()
+    
+
+
+    return node_features, homo.edge_index     
         
 class BaselineModel(torch.nn.Module):
     def __init__(
