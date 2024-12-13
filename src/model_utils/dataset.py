@@ -11,7 +11,7 @@ from relbench.modeling.graph import make_pkey_fkey_graph
 from relbench.modeling.graph import get_node_train_table_input
 from torch_geometric.loader import NeighborLoader
 
-from text_embeddings import GloveTextEmbedding
+from src.embeddings.text_embeddings import GloveTextEmbedding
 
 import config
 import torch
