@@ -15,7 +15,6 @@ from typing import Any, Dict, List
 from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import MLP
-from HeteroDataBrian import HeteroDataBrian
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
 from to_homogeneous import to_homogeneous
@@ -392,7 +391,6 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     print(node_features, x_index)
     return node_features, x_index
 
-
 def num_node_features_get(self):
     # Just return the same dictionary that the original property would return
     return {
@@ -639,7 +637,7 @@ class BaselineModel(torch.nn.Module):
         for node_type, embedding in self.embedding_dict.items():
             x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
 
-        process_hetero_batch(x_dict, batch, self.channels)
+        # process_hetero_batch(x_dict, batch, self.channels)
 
         x_dict = self.gnn(
             x_dict,

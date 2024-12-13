@@ -8,10 +8,10 @@ NUM_WORKERS = 0
 BATCH_SIZE = 512
 
 #Model-related Params
-EPOCHS = 500
+EPOCHS = 30
 EPOCHS_TO_SAVE = 2
 EPOCHS_TO_SWITCH = 50
-LR = 0.005
+LRS = {"driver-position" : 0.005, "driver-top3": 0.005}
 WEIGHT_DECAY = 0.01 
 DROPOUT = 0.1 
 # make DROPOUT_FFWD and DROPOUT_ATT
@@ -20,6 +20,7 @@ NUM_HEADS = 8
 NUM_LAYERS = 5  # change this later
 
 CHECKPOINT = True 
+CHECKPOINT_FOLDER = "./checkpoints"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #Dictionary that maps RelBench database to their associated tasks
 RELBENCH_DATASETS = {

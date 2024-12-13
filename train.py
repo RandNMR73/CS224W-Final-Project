@@ -11,7 +11,7 @@ import numpy as np
 import config
 import math
 import copy
-# import wandb  # add wandb to docker container 
+import wandb  # add wandb to docker container 
 import os # add os to container 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -23,7 +23,6 @@ from torch_geometric.loader import NeighborLoader
 from model import RelTransformer
 from torch_geometric.data import HeteroData
 from torch_geometric import compile 
-from HeteroDataBrian import HeteroDataBrian
 # from fvcore.nn import FlopCountAnalysis  # need to add to docker container 
 
 # need to add mixed-precision training
@@ -88,24 +87,12 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
     scaler = GradScaler()
     loss_accum = count_accum = 0
     for batch in tqdm(loader):
-        # create scuffed HeteroData object
-        # print("type(batch):", type(batch))
-        # print(f"batch edge_index_dict: {batch.edge_index_dict}")
-        # attributes = vars(batch)
-        # print(f"attributes: {attributes}")
-        # batch_scuffed = HeteroData(**attributes)
-        # batch_scuffed.edge_index_dict = batch.edge_index_dict
-        # batch_scuffed = HeteroDataBrian(copy.deepcopy(batch))
-        # batch_scuffed.edge_index_dict = batch.edge_index_dict
-        # batch_scuffed.num_nodes_dict = batch.num_nodes_dict
-        # print(f"batch_scuffed: {batch_scuffed}")
-        # print(f"batch: {batch}")
+        
         batch = batch.to(config.DEVICE)
         optimizer.zero_grad()
         # with autocast('cuda') if config.DEVICE=='cuda' else contextlib.nullcontext():
         pred = model(
             batch,  # needs to be the original HeteroData object 
-            # batch_scuffed,
             task.entity_table,
         )
         pred = pred.view(-1) if pred.size(1) == 1 else pred
@@ -118,7 +105,6 @@ def train(task, entity_table, model, loader: NeighborLoader, loss_fn, optimizer)
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
-        # wandb.log({"train_loss": loss.item()})
 
     return loss_accum / count_accum
 
@@ -159,7 +145,6 @@ def val(task, entity_table, model, loader: NeighborLoader, loss_fn) -> float:
 
         loss_accum += loss.detach().item() * pred.size(0)
         count_accum += pred.size(0)
-        # wandb.log({"val_loss": loss.item()})
     
     return loss_accum / count_accum, torch.cat(pred_list, dim = 0).numpy()
 
@@ -213,9 +198,9 @@ def train_val_on_single(train_items, model, optimizer, loss_fn):
         train_loss = train(train_items.task, train_items.entity_table, model, train_items.loader_dict["train"], loss_fn, optimizer)
         val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
         val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
-        # print(f"train_items: {train_items}")
+
         print(f"Epoch: {epoch :02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
-        # wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
+        wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
         
         if (higher_is_better and val_metrics[tune_metric] > best_val_metric) or (
             not higher_is_better and val_metrics[tune_metric] < best_val_metric
@@ -269,7 +254,7 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
             val_loss, val_pred = val(train_items.task, train_items.entity_table, model, train_items.loader_dict["val"], loss_fn)
             val_metrics = train_items.task.evaluate(val_pred, train_items.val_table)
             print(f"Task: {random_task}, Epoch: {task_epochs[random_task] :02d}, Train loss: {train_loss}, Val metrics: {val_metrics}")
-            # wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
+            wandb.log({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **val_metrics})
             
             task_epochs[random_task] += 1
             total_epochs_trained += 1
@@ -286,10 +271,10 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
                     'optimizer_state_dict': optimizer.state_dict(),
                     'training_loss': train_loss,
                     'validation_loss': val_loss,
-                }, 'checkpoint.pth')
+                }, f"{config.CHECKPOINT_FOLDER}/{database_name}/{task_name}.pth")
 
 def main():
-    # wandb.init(project="")
+    
     hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
 
     model = BaselineModel(
@@ -306,13 +291,16 @@ def main():
 
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr = config.LR)
     epochs = config.EPOCHS
     database_name = "rel-f1"
     task_name = "driver-position"
+
+    optimizer = torch.optim.Adam(model.parameters(), lr = config.LRS[task_name])
+
+    wandb.init(project=f"{database_name}_{task_name}")
     train_items = task_to_train_info[task_name]
 
-    train_val_on_single(train_items, model, optimizer, loss_fn)
+    train_val_on_single(train_items, model, optimizer, loss_fn, database_name, task_name)
 
     # dummy example (replace with actual RelBench associated stuff)
     # node_embeddings = torch.randn((5,2))
@@ -340,7 +328,7 @@ def main():
 
     # train_val_on_all(task_to_train_info, model, optimizer, loss_fn)
 
-    # wandb.finish()
+    wandb.finish()
 
 if __name__ == "__main__":
     main()
