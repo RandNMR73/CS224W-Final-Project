@@ -14,7 +14,8 @@ from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
-from baseline_models import process_hetero_batch
+from torch.nn import Embedding, ModuleDict
+from torch_geometric.nn import MLP
 
 # General Architecture Stuff
 # add regularization if needed (we can see based on the training dynamics of model) (using AdamW by default)
@@ -27,8 +28,7 @@ class MultiHeadAttention(nn.Module):
                  embed_dim, # config
                  num_heads, # config
                  num_nodes, # pass in directly
-                 num_edges, # pass in directly
-                 adj_mat, # pass in directly 
+                 num_edges, # pass in directly 
                  dropout, # config
                  is_hh_att=False, 
                  is_he_att=False, 
@@ -43,7 +43,6 @@ class MultiHeadAttention(nn.Module):
             num_heads (int): Number of attention heads.
             num_nodes (int): Number of nodes in the graph.
             num_edges (int): Number of edges in the graph.
-            adj_mat (Tensor): Adjacency matrix for the graph.
             dropout (float): Dropout rate for attention.
             is_hh_att (bool): Flag for using head-to-head attention.
             is_he_att (bool): Flag for using head-to-edge attention.
@@ -80,14 +79,13 @@ class MultiHeadAttention(nn.Module):
         self.is_ee_att = is_ee_att 
         self.is_e_out = is_e_out  # if the output of the computation gives new edge embeddings
 
-        self.adj_mat = adj_mat # find where to get adjacency matrix from relbench and pass in as param to constructor (function to convert coo tensor to adj matrix) (pass in the coo tensor and do sparse_mm instead of passing adj mat since we don't want to bloat memory either)
         # find where to get the number of edges and the number of nodes in the graph from relbench (used for making sure that the shapes of the proj matrices match up)
         self.shape_proj_mat_1 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
         self.shape_proj_mat_2 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
         nn.init.xavier_uniform_(self.shape_proj_mat_1)
         nn.init.xavier_uniform_(self.shape_proj_mat_2)
 
-    def forward(self, q, k, v):
+    def forward(self, q, k, v, edge_index):
         """
         Forward pass for the MultiHeadAttention module.
 
@@ -99,8 +97,8 @@ class MultiHeadAttention(nn.Module):
         Returns:
             Tensor: Output tensor after applying attention.
         """
-        N, E = query.shape
-        N, E = value.shape
+        N, E = q.shape  # query.shape
+        N, E = v.shape  # value.shape 
         H = self.n_head
 
         # new modifications 
@@ -125,19 +123,19 @@ class MultiHeadAttention(nn.Module):
         else:
             self.value = self.value_h 
 
-        query = self.query(q)# (N, E)
+        query = self.query(q) # (N, E)
         key = self.key(k) # (N, E)
         value = self.value(v) # (N, E)
 
         # new modifications
-        if self.is_hh_att:
-            query = torch.sparse.mm(query, self.adj_mat)
+        if self.is_hh_att:  # equivalent of a graph convolution 
+            query = torch.sparse.mm(edge_index, query)  # might need to do conversion (pass in placeholder tensor torch.ones())
         
         if self.is_he_att:
-            key = self.shape_proj_mat_1 @ key 
+            query = self.shape_proj_mat_1 @ query 
         
         if self.is_eh_att:
-            key = self.shape_proj_mat_2 @ key  
+            query = self.shape_proj_mat_2 @ query 
         
         query, key, value = query.view(N, H, E//H), key.view(N, H, E//H), value.view(N, H, E//H) 
         
@@ -208,7 +206,6 @@ class Block(nn.Module):
                  num_heads, # config
                  num_nodes, # pass in directly
                  num_edges, # pass in directly
-                 adj_mat, # pass in directly 
                  dropout_att, # config
                  dropout_ffwd,  # add to config 
                  ):
@@ -221,23 +218,18 @@ class Block(nn.Module):
             num_heads (int): Number of attention heads.
             num_nodes (int): Number of nodes in the graph.
             num_edges (int): Number of edges in the graph.
-            adj_mat (Tensor): Adjacency matrix for the graph.
             dropout_att (float): Dropout rate for attention.
             dropout_ffwd (float): Dropout rate for the feedforward network.
         """
         # n_embed, n_heads, head_size, dropout,
         super().__init__()
         # head_size = embed_dim // num_heads 
-        self.sa_hh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True)  # (N, H, E/H)
-        self.sa_ee_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True)  # (N, H, E/H)
-        self.sa_he_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True)  # (N, H, E/H)
-        self.sa_eh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True)  # (N, H, E/H)
 
-        self.sa_hh_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True, is_e_out=True)  # (N, H, E/H)
-        self.sa_ee_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True, is_e_out=True)  # (N, H, E/H)
-        self.sa_he_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True, is_e_out=True)  # (N, H, E/H)
-        self.sa_eh_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True, is_e_out=True)  # (N, H, E/H)
+        self.sa_hh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, dropout_att, is_hh_att=True)  # (N, H, E/H)
+        self.sa_eh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, dropout_att, is_eh_att=True)  # (N, H, E/H)
 
+        self.sa_ee_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, dropout_att, is_ee_att=True, is_e_out=True)  # (N, H, E/H)
+        self.sa_he_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, dropout_att, is_he_att=True, is_e_out=True)  # (N, H, E/H)
 
         self.ffwd_h = FeedForward(embed_dim, dropout_ffwd)
         self.ffwd_e = FeedForward(embed_dim, dropout_ffwd)
@@ -247,7 +239,7 @@ class Block(nn.Module):
         self.rmsn2_h = nn.RMSNorm(embed_dim)
         self.rmsn2_e = nn.RMSNorm(embed_dim)
     
-    def forward(self, x_node, x_edge):
+    def forward(self, x_node, x_edge, edge_index):
         """
         Forward pass for the Block module.
 
@@ -258,23 +250,22 @@ class Block(nn.Module):
         Returns:
             Tensor: Output tensor after applying attention and feedforward layers.
         """
-        h = self.rmsn1_h(x_node)
-        e = self.rmsn1_e(x_edge)
-        x_h = self.sa_hh_h(h, h, h) + self.sa_ee_h(e, e, h) + self.sa_eh_h(e, h, h) + self.sa_he_h(h, e, h)  # can add gating here 
-        x_e = self.sa_hh_e(h, h, h) + self.sa_ee_e(e, e, h) + self.sa_eh_e(e, h, h) + self.sa_he_e(h, e, h)  # can add gating here  # shouldn't be a problem in terms of efficiency but we can check       
+        h = self.rmsn1_h(x_node) + x_node 
+        e = self.rmsn1_e(x_edge) + x_edge 
+        x_h = self.sa_hh_h(h, h, h, edge_index) + self.sa_eh_h(e, h, h, edge_index) + h # can add gating here 
+        x_e = self.sa_ee_e(e, e, e, edge_index) + self.sa_he_e(h, e, e, edge_index) + e # can add gating here  # shouldn't be a problem in terms of efficiency but we can check       
 
-        x_h = self.ffwd_h(self.rmsn2_h(x_h))
-        x_e = self.ffwd_e(self.rmsn2_h(x_e))
+        x_h = self.ffwd_h(self.rmsn2_h(x_h)) + x_h 
+        x_e = self.ffwd_e(self.rmsn2_e(x_e)) + x_e
         return x_h, x_e 
 
-class RelTransformer(MessagePassing):
+class RelTransformer(MessagePassing):  # needed to call HeteroConv wrapper 
     def __init__(self, 
-                node_embeddings, 
                 n_embed, # config
                 num_blocks, # config              
                 num_heads, # config
-                num_nodes, # pass in directly
-                num_edges, # pass in directly
+                num_nodes, # pass in x.shape[0]
+                num_edges, # pass in edge_index.shape[1]
                 dropout):  # config 
         """
         Initializes the RelTransformer module, which consists of multiple
@@ -287,48 +278,51 @@ class RelTransformer(MessagePassing):
             num_heads (int): Number of attention heads.
             num_nodes (int): Number of nodes in the graph.
             num_edges (int): Number of edges in the graph.
-            adj_mat (Tensor): Adjacency matrix for the graph.
             dropout (float): Dropout rate for the transformer.
         """
         super().__init__()
-
         # process embeddings 
-        self.node_embeddings = nn.Parameter(node_embeddings)
-        self.num_nodes = node_embeddings.shape[0]  # N
+        self.num_nodes = num_nodes
+        self.num_edges = num_edges 
         self.n_embed = n_embed 
-        self.edge_embeddings = nn.Embedding(num_edges, n_embed)
+        self.edge_embeddings = nn.Parameter(torch.empty(num_edges, n_embed))
+        nn.init.kaiming_uniform_(self.edge_embeddings, a=1.7715, nonlinearity='leaky_relu')
         self.num_blocks = num_blocks
         self.blocks = nn.ModuleList()
         for _ in range(self.num_blocks):
-            self.blocks.append(Block(n_embed, num_heads, num_nodes, num_edges, adj_mat, dropout)) 
+            self.blocks.append(Block(n_embed, num_heads, num_nodes, num_edges, dropout_att=dropout, dropout_ffwd=dropout)) 
     
-    def forward(self, x_dict, edge_index_dict):  # pass in node embeddings from subgraph sampling function (make sure that n_embed)
+    # dummy function
+    def message(self, x):
+        pass 
+    
+    def forward(self, x, edge_index):  
         """
         Forward pass for the RelTransformer module.
 
         Returns:
             Tensor: Output tensor after passing through all transformer blocks.
         """
-        # pass in x_dict into Gabe's function to get the node embeddings and batch (HeteroData object) into fwd method (look in baseline_models.py)
-        self.node_embeddings = process_hetero_batch(x_dict,, self.n_embed)
-        out_h = self.node_embeddings
+        out_h = x
         out_e = self.edge_embeddings 
         for block in self.blocks:
-            out_h, out_e = block(out_h, out_e)  # is there something weird about this? yes! what if we try learning an (n+m) x d tensor instead
+            out_h, out_e = block(out_h, out_e, edge_index)  
         return out_h
-
 
 class HeteroRelTransformer(torch.nn.Module):
     """
     PyG-ified RelTransformer.
     """
-
     def __init__(
         self,
-        node_types: List[NodeType],
         edge_types: List[EdgeType],
         channels: int,
-        aggr = None,
+        num_blocks,
+        num_heads,
+        num_nodes,  # pass in x.shape[0]
+        num_edges,  # pass in edge_index.shape[1]
+        dropout,
+        aggr="mean",
         num_layers: int = 4,
     ):
         super().__init__()
@@ -337,10 +331,16 @@ class HeteroRelTransformer(torch.nn.Module):
         for _ in range(num_layers):
             conv = HeteroConv(
                 {
-                    edge_type: RelTransformer(embed_dim=channels, )
+                    edge_type: RelTransformer( 
+                                              n_embed=channels, 
+                                              num_blocks=num_blocks, 
+                                              num_heads=num_heads,
+                                              num_nodes=num_nodes,
+                                              num_edges=num_edges,
+                                              dropout=dropout)
                     for edge_type in edge_types
                 },
-                aggr=None,
+                aggr=aggr,
             )
             self.convs.append(conv)
 
@@ -359,3 +359,186 @@ class HeteroRelTransformer(torch.nn.Module):
             x_dict = conv(x_dict, edge_index_dict)
 
         return x_dict
+
+class Model(torch.nn.Module):
+    def __init__(
+        self,
+        data: HeteroData,
+        col_stats_dict: Dict[str, Dict[str, Dict[StatType, Any]]],
+        num_layers: int,
+        channels: int,
+        out_channels: int,
+        aggr: str,
+        norm: str,
+        num_blocks,
+        num_heads,
+        num_nodes, 
+        num_edges, 
+        dropout,
+        # List of node types to add shallow embeddings to input
+        shallow_list: List[NodeType] = [],
+        # ID awareness
+        id_awareness: bool = False,
+    ):
+        """
+        Initialize the BaselineModel.
+
+        Args:
+            data (HeteroData): The heterogeneous data for the model.
+            col_stats_dict (Dict[str, Dict[str, Dict[StatType, Any]]]): Column statistics for the model.
+            gnn_layer (str): The type of GNN layer to use ("RGCN" or "HeteroGAT").
+            num_layers (int): Number of layers in the GNN.
+            channels (int): Number of channels for the GNN.
+            out_channels (int): Number of output channels.
+            aggr (str): Aggregation method for the GNN.
+            shallow_list (List[NodeType], optional): List of node types for shallow embeddings (default is empty).
+            id_awareness (bool, optional): Whether to use ID awareness (default is False).
+        """
+        super().__init__()
+        self.channels = channels
+        self.encoder = HeteroEncoder(
+            channels=channels,
+            node_to_col_names_dict={
+                node_type: data[node_type].tf.col_names_dict
+                for node_type in data.node_types
+            },
+            node_to_col_stats=col_stats_dict,
+        )
+        self.temporal_encoder = HeteroTemporalEncoder(
+            node_types=[
+                node_type for node_type in data.node_types if "time" in data[node_type]
+            ],
+            channels=channels,
+        )
+
+        self.gnn = HeteroRelTransformer( 
+                                        edge_types=data.edge_types, 
+                                        channels=channels, 
+                                        num_blocks=num_blocks,
+                                        num_heads=num_heads,
+                                        num_nodes=num_nodes, 
+                                        num_edges=num_edges, 
+                                        dropout=dropout,
+                                        aggr=aggr,
+                                        num_layers=num_layers)
+        
+        # self.gnn = gnn(
+        #     node_types=data.node_types,
+        #     edge_types=data.edge_types,
+        #     channels=channels,
+        #     aggr=aggr,
+        #     num_layers=num_layers,
+        # )
+
+        self.head = MLP(
+            channels,
+            out_channels=out_channels,
+            norm=norm,
+            num_layers=1,
+        )
+        self.embedding_dict = ModuleDict(
+            {
+                node: Embedding(data.num_nodes_dict[node], channels)
+                for node in shallow_list
+            }
+        )
+
+        self.id_awareness_emb = None
+        if id_awareness:
+            self.id_awareness_emb = torch.nn.Embedding(1, channels)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.encoder.reset_parameters()
+        self.temporal_encoder.reset_parameters()
+        self.gnn.reset_parameters()
+        self.head.reset_parameters()
+        for embedding in self.embedding_dict.values():
+            torch.nn.init.normal_(embedding.weight, std=0.1)
+        if self.id_awareness_emb is not None:
+            self.id_awareness_emb.reset_parameters()
+
+    # make sure to adjust batch before HeteroData 
+    def forward(
+        self,
+        batch: HeteroData,
+        # batch_scuffed, 
+        entity_table: NodeType,
+    ) -> Tensor:
+        """
+        Forward pass through the BaselineModel.
+
+        Args:
+            batch (HeteroData): The batch of data for the model.
+            entity_table (NodeType): The entity table to process.
+
+        Returns:
+            Tensor: The output tensor after processing the batch.
+        """
+        seed_time = batch[entity_table].seed_time
+
+        x_dict = self.encoder(batch.tf_dict)
+
+        rel_time_dict = self.temporal_encoder(
+            seed_time, batch.time_dict, batch.batch_dict
+        )
+
+        for node_type, rel_time in rel_time_dict.items():
+            x_dict[node_type] = x_dict[node_type] + rel_time
+
+        for node_type, embedding in self.embedding_dict.items():
+            x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
+
+        # process_hetero_batch(x_dict, batch, self.channels)
+
+        x_dict = self.gnn(
+            x_dict,
+            batch.edge_index_dict,
+            batch.num_sampled_nodes_dict,
+            batch.num_sampled_edges_dict,
+        )
+        
+        return self.head(x_dict[entity_table][: seed_time.size(0)])
+
+    def forward_dst_readout(
+        self,
+        batch: HeteroData,
+        entity_table: NodeType,
+        dst_table: NodeType,
+    ) -> Tensor:
+        """
+        Forward pass for destination readout.
+
+        Args:
+            batch (HeteroData): The batch of data for the model.
+            entity_table (NodeType): The entity table to process.
+            dst_table (NodeType): The destination table to read from.
+
+        Returns:
+            Tensor: The output tensor after processing the destination readout.
+        """
+        if self.id_awareness_emb is None:
+            raise RuntimeError(
+                "id_awareness must be set True to use forward_dst_readout"
+            )
+        seed_time = batch[entity_table].seed_time
+        x_dict = self.encoder(batch.tf_dict)
+        # Add ID-awareness to the root node
+        x_dict[entity_table][: seed_time.size(0)] += self.id_awareness_emb.weight
+
+        rel_time_dict = self.temporal_encoder(
+            seed_time, batch.time_dict, batch.batch_dict
+        )
+
+        for node_type, rel_time in rel_time_dict.items():
+            x_dict[node_type] = x_dict[node_type] + rel_time
+
+        for node_type, embedding in self.embedding_dict.items():
+            x_dict[node_type] = x_dict[node_type] + embedding(batch[node_type].n_id)
+        
+        x_dict = self.gnn(
+            x_dict,
+            batch.edge_index_dict,
+        )
+
+        return self.head(x_dict[dst_table])

@@ -17,10 +17,11 @@ from torch_geometric.data import HeteroData
 from torch_geometric.nn import MLP
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
-from to_homogeneous import to_homogeneous
 
 import config
 import time
+
+from model_PyG import HeteroRelTransformer
 
 class RGCN(torch.nn.Module):
     """
