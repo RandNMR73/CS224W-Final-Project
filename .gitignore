@@ -6,3 +6,6 @@ venv/
 data/
 
 224w_container.sif
+
+#Checkpoints
+checkpoints/

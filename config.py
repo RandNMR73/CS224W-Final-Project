@@ -11,7 +11,8 @@ BATCH_SIZE = 512
 EPOCHS = 30
 EPOCHS_TO_SAVE = 2
 EPOCHS_TO_SWITCH = 50
-LRS = {"driver-position" : 0.005, "driver-top3": 0.005}
+# LRS = {"driver-dnf": 0.005, "driver-position" : 0.005, "driver-top3": 0.005}
+LRS = {"study-outcome": 0.005, "study-adverse": 0.005, "site-success": 0.005, "condition-sponsor-run": 0.005, "site-sponsor-run": 0.005, "user-visits": 0.005}
 WEIGHT_DECAY = 0.01 
 DROPOUT = 0.1 
 # make DROPOUT_FFWD and DROPOUT_ATT

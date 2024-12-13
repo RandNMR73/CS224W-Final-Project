@@ -44,7 +44,7 @@ def load_task_dataset(dataset_name, task_name):
 
     return task, train_table, val_table, test_table
 
-def get_data_graph(dataset):
+def get_data_graph(dataset, dataset_name):
     """
     Given dataset, get heterogenous graph for dataset and column statistics of each table
     """
@@ -61,7 +61,7 @@ def get_data_graph(dataset):
         col_to_stype_dict=col_to_stype_dict,  # speficied column types
         text_embedder_cfg=text_embedder_cfg,  # our chosen text encoder
         cache_dir=os.path.join(
-            config.ROOT_DIR, f"rel-f1_materialized_cache"
+            config.ROOT_DIR, f"{dataset_name}_materialized_cache"
         ),  # store materialized graph for convenience
     )
 
@@ -133,7 +133,7 @@ def create_task_train_dict(dataset_name):
     """
     task_to_train_info = {}
     dataset = get_dataset(dataset_name, download=True)
-    hetero_graph, col_stats_dict = get_data_graph(dataset)
+    hetero_graph, col_stats_dict = get_data_graph(dataset, dataset_name)
     for task_name in config.RELBENCH_DATASETS[dataset_name]:
         task, train_table, val_table, test_table = load_task_dataset(dataset_name, task_name)
         loader_dict, entity_table = load_data(hetero_graph, task, train_table, val_table, test_table)

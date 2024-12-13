@@ -179,7 +179,7 @@ def test(model, task, loader: NeighborLoader, loss=True) -> np.ndarray:
         pred_list.append(pred.detach().cpu())
     return torch.cat(pred_list, dim=0).numpy()
 
-def train_val_on_single(train_items, model, optimizer, loss_fn):
+def train_val_on_single(train_items, model, optimizer, loss_fn, database_name, task_name, layer_type):
     """
     Trains and validates the model on single task specified in train_items.
 
@@ -208,13 +208,13 @@ def train_val_on_single(train_items, model, optimizer, loss_fn):
             best_val_metric = val_metrics[tune_metric]
             state_dict = copy.deepcopy(model.state_dict())
         if config.CHECKPOINT and (epoch + 1) % config.EPOCHS_TO_SAVE == 0:
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'training_loss': train_loss,
-                'validation_loss': val_loss,
-            }, 'checkpoint.pth')
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'training_loss': train_loss,
+                    'validation_loss': val_loss,
+                }, f"{config.CHECKPOINT_FOLDER}/{database_name}/{layer_type}_{task_name}.pth")
 
 def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
     """
@@ -274,13 +274,15 @@ def train_val_on_all(task_to_train_info, model, optimizer, loss_fn):
                 }, f"{config.CHECKPOINT_FOLDER}/{database_name}/{task_name}.pth")
 
 def main():
+    database_name = "rel-avito"
+    task_name = "user-visits"
     
-    hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
-
+    hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict(database_name)
+    layer_type = "HeteroGAT"
     model = BaselineModel(
         data=hetero_graph,
         col_stats_dict=col_stats_dict,
-        gnn_layer = "RGCN",
+        gnn_layer = layer_type,
         num_layers=2,
         channels=128,
         out_channels=1,
@@ -292,15 +294,14 @@ def main():
     # if you try out different RelBench tasks you will need to change these
     loss_fn = L1Loss()
     epochs = config.EPOCHS
-    database_name = "rel-f1"
-    task_name = "driver-position"
+    
 
     optimizer = torch.optim.Adam(model.parameters(), lr = config.LRS[task_name])
 
-    wandb.init(project=f"{database_name}_{task_name}")
+    wandb.init(project=f"{layer_type}_{database_name}_{task_name}")
     train_items = task_to_train_info[task_name]
 
-    train_val_on_single(train_items, model, optimizer, loss_fn, database_name, task_name)
+    train_val_on_single(train_items, model, optimizer, loss_fn, database_name, task_name, layer_type)
 
     # dummy example (replace with actual RelBench associated stuff)
     # node_embeddings = torch.randn((5,2))
