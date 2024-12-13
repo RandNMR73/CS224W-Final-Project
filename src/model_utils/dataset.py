@@ -34,6 +34,9 @@ def load_task_dataset(dataset_name, task_name):
     Args:
         dataset_name (str): Name of the dataset.
         task_name (str): Name of the task.
+
+    Returns:
+        tuple: A tuple containing the task and its associated train, validation, and test tables.
     """
 
     task = get_task(dataset_name, task_name, download=True)
@@ -46,73 +49,85 @@ def load_task_dataset(dataset_name, task_name):
 
 def get_data_graph(dataset, dataset_name):
     """
-    Given dataset, get heterogenous graph for dataset and column statistics of each table
+    Create a heterogeneous graph and retrieve column statistics from the dataset.
+
+    Args:
+        dataset (Dataset): The dataset object.
+        dataset_name (str): The name of the dataset.
+
+    Returns:
+        tuple: A tuple containing the heterogeneous graph and column statistics dictionary.
     """
     db = dataset.get_db()
     col_to_stype_dict = get_stype_proposal(db)
 
+    # Configure the text embedder
     text_embedder_cfg = TextEmbedderConfig(
         text_embedder=GloveTextEmbedding(device=config.DEVICE), batch_size=256
     )
 
-    # Get the heterogeneous graph and column statistics
+    # Create the heterogeneous graph and retrieve column statistics
     hetero_graph, col_stats_dict = make_pkey_fkey_graph(
         db,
         col_to_stype_dict=col_to_stype_dict,  # speficied column types
         text_embedder_cfg=text_embedder_cfg,  # our chosen text encoder
         cache_dir=os.path.join(
             config.ROOT_DIR, f"{dataset_name}_materialized_cache"
-        ),  # store materialized graph for convenience
+        ),  # Store materialized graph for convenience
     )
 
     return hetero_graph, col_stats_dict
 
 def load_data(hetero_graph, task, train_table, val_table, test_table):
     """
-    Return a single dictionary containing the dataset, task, train_table, val_table, 
-    test_table, hetero_graph, and col_stats_dict
+    Load data into a dictionary containing the dataset, task, and data loaders.
 
     Args:
-        hetero_graph (HeteroData): HeteroData object
-        dataset (Dataset): Dataset object
-        task (Task): Task object
-        train_table (Table): Train Table object
-        val_table (Table): Validation Table object
-        test_table (Table): Test Table object
+        hetero_graph (HeteroData): HeteroData object.
+        task (Task): Task object.
+        train_table (Table): Train Table object.
+        val_table (Table): Validation Table object.
+        test_table (Table): Test Table object.
+
+    Returns:
+        tuple: A tuple containing the loader dictionary and the entity table.
     """
-    
     loader_dict = {}
 
+    # Iterate through train, validation, and test splits
     for split, table in [
         ("train", train_table),
         ("val", val_table),
         ("test", test_table),
     ]:
+        # Prepare the input for the node training table
         table_input = get_node_train_table_input(
             table=table,
             task=task,
         )
-        entity_table = table_input.nodes[0]
+        entity_table = table_input.nodes[0]  # Get the first node as the entity table
         loader_dict[split] = NeighborLoader(
             hetero_graph,
             num_neighbors=[
                 config.NEIGHBORS_PER_NODE for i in range(config.DEPTH)
-            ],  # we sample subgraphs of depth 2, 128 neighbors per node.
+            ],  # Sample subgraphs of specified depth and neighbors
             time_attr="time",
             input_nodes=table_input.nodes,
             input_time=table_input.time,
             transform=table_input.transform,
             batch_size=config.BATCH_SIZE,
             temporal_strategy="uniform",
-            shuffle = split == "train",
+            shuffle=split == "train",  # Shuffle only for training
             num_workers=config.NUM_WORKERS,
             persistent_workers=False,
         )
     
     return loader_dict, entity_table
 
+# Named tuple to hold task training information
 TaskTrainValInfo = namedtuple("TaskTrainValInfo", ["task", "task_metrics", "loader_dict", 
                                                         "col_stats_dict", "entity_table", "val_table"])
+
 def create_task_train_dict(dataset_name):
     """
     Create a dictionary mapping task names to their training information.
@@ -142,6 +157,9 @@ def create_task_train_dict(dataset_name):
     return hetero_graph, col_stats_dict, task_to_train_info
 
 def main():
+    """
+    Main function to execute the task training dictionary creation and print the results.
+    """
     hetero_graph, col_stats_dict, task_to_train_info = create_task_train_dict("rel-f1")
     print(task_to_train_info)
 

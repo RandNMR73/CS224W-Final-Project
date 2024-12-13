@@ -1,29 +1,48 @@
 import torch 
 import relbench
 
+# Directory and resource configurations
 ROOT_DIR = "./data"
 NEIGHBORS_PER_NODE = 128
 DEPTH = 2
 NUM_WORKERS = 0
 BATCH_SIZE = 512
 
-#Model-related Params
+# Model-related parameters
 EPOCHS = 30
 EPOCHS_TO_SAVE = 2
 EPOCHS_TO_SWITCH = 50
-# LRS = {"driver-dnf": 0.005, "driver-position" : 0.005, "driver-top3": 0.005}
-LRS = {"study-outcome": 0.005, "study-adverse": 0.005, "site-success": 0.005, "condition-sponsor-run": 0.005, "site-sponsor-run": 0.005, "user-visits": 0.005}
-WEIGHT_DECAY = 0.01 
-DROPOUT = 0.1 
-# make DROPOUT_FFWD and DROPOUT_ATT
+
+# LRS for rel-f1
+LRS = {"driver-dnf": 0.005,
+       "driver-position" : 0.005,
+       "driver-top3": 0.005
+       }
+# LRS for rel-trial
+# LRS = {
+#     "study-outcome": 0.005,
+#     "study-adverse": 0.005,
+#     "site-success": 0.005,
+#     "condition-sponsor-run": 0.005,
+#     "site-sponsor-run": 0.005,
+#     "user-visits": 0.005
+# }
+
+# Regularization parameters
+WEIGHT_DECAY = 0.01
+DROPOUT = 0.1
+
+# Model architecture parameters
 EMBED_DIM = 512
 NUM_HEADS = 8
-NUM_LAYERS = 5  # change this later
+NUM_LAYERS = 5
 
-CHECKPOINT = True 
+# Checkpointing configurations
+CHECKPOINT = True
 CHECKPOINT_FOLDER = "./checkpoints"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#Dictionary that maps RelBench database to their associated tasks
+
+# RelBench datasets mapping
 RELBENCH_DATASETS = {
     "rel-amazon": ["user-churn", "item-churn", "user-ltv", "item-ltv", "user-item-purchase", "user-item-rate", "user-item-review"], 
     "rel-stack": ["user-engagement", "user-badge", "post-votes", "user-post-comment", "post-post-related"],
@@ -34,6 +53,7 @@ RELBENCH_DATASETS = {
     "rel-avito": ["user-visits", "user-clicks", "ad-ctr", "user-ad-visit"] 
 }
 
+# Configuration for metrics evaluation
 HIGHER_IS_BETTER = {
     relbench.metrics.accuracy: True,
     relbench.metrics.log_loss: False,

@@ -50,6 +50,7 @@ class RGCN(torch.nn.Module):
 
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
+            # Create a HeteroConv layer for each layer in the model
             conv = HeteroConv(
                 {
                     edge_type: SAGEConv((channels, channels), channels, aggr=aggr)
@@ -63,6 +64,7 @@ class RGCN(torch.nn.Module):
         for _ in range(num_layers):
             norm_dict = torch.nn.ModuleDict()
             for node_type in node_types:
+                # Layer normalization for each node type
                 norm_dict[node_type] = LayerNorm(channels, mode="node")
             self.norms.append(norm_dict)
 
@@ -101,7 +103,7 @@ class RGCN(torch.nn.Module):
             x_dict = {key: x.relu() for key, x in x_dict.items()}
 
         return x_dict
-    
+
 class HeteroGAT(torch.nn.Module):
     """
     Implementation of heterogeneous GAT.
@@ -130,6 +132,7 @@ class HeteroGAT(torch.nn.Module):
 
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
+            # Create a HeteroConv layer for GAT with specified number of attention heads
             conv = HeteroConv(
                 {
                     edge_type: GATConv(
@@ -145,6 +148,7 @@ class HeteroGAT(torch.nn.Module):
         for _ in range(num_layers):
             norm_dict = torch.nn.ModuleDict()
             for node_type in node_types:
+                # Layer normalization for each node type
                 norm_dict[node_type] = LayerNorm(channels, mode="node")
             self.norms.append(norm_dict)
 
@@ -205,8 +209,7 @@ def process_hetero_batch_nodes(x_dict, batch):
     # Iterate over all node types and their sampled node counts
     for node_type, hop_node_counts_for_node_type in batch.num_sampled_nodes_dict.items():
         if sum(hop_node_counts_for_node_type):  # Process only if there are sampled nodes      
-           
-            #Calculate ranges of nodes between hops
+            # Calculate ranges of nodes between hops
             ends = [sum(hop_node_counts_for_node_type[:i+2]) for i in range(len(hop_node_counts_for_node_type) - 1)]
             tmp = hop_node_counts_for_node_type[0]
             hop_node_counts_for_node_type[0] = 0
@@ -269,13 +272,9 @@ def process_hetero_edges(batch):
 
     # Extract edge indices for each edge type and hop
     for relation_type, relation_type_hop_counts in batch.num_sampled_edges_dict.items():
-        
         cumsum_rel_types = torch.cumsum(torch.tensor(relation_type_hop_counts), dim=0)  # Cumulative edge counts
         if sum(cumsum_rel_types):  # Process only if there are edges
-            print(relation_type_hop_counts)
-            print(cumsum_rel_types)
-            print(relation_type, relation_type_hop_counts)
-            rel_type_hop_edge_index = {}  # Dictionary to store edge indices for each hop
+            rel_type_hop_edge_index = {}  # Store edge indices for each hop
             
             # Extract edges for each hop
             for hop in range(len(relation_type_hop_counts)):
@@ -302,63 +301,44 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
     Returns:
         None: This function modifies the edge_index in place and does not return a value.
     """
-    print(f"batch (HeteroData object): {batch}")
-    print(f"x_dict: {x_dict}")
-    
     node_type_counts, node_features_dict, hop_node_counts = process_hetero_batch_nodes(x_dict, batch)
-    print(f"node_type_counts: {node_type_counts}")
-    print(f"node_features_dict: {node_features_dict}")
-    print(f"hop_node_counts: {hop_node_counts}")
     offsets = compute_node_offsets(batch, node_type_counts)
-    print(f"offsets{offsets}")
     edge_index_dict = process_hetero_edges(batch)
-    print(f"edge_index_dict{edge_index_dict}")
+
     # Determine the number of hops (assume all edge types have the same number of hops)
-    #TODO: CHANGE TO K
     num_hops = len(list(batch.num_sampled_edges_dict.values())[0])
     edge_index = [torch.empty((2, 0), dtype=torch.long, device=config.DEVICE) for _ in range(num_hops)]  # Empty edge index for each hop
-    print(f"num_hops: {num_hops}")
-    print(f"edge_index: {edge_index}")
-    #Calculate number of nodes per edge hop (so number of nodes for hops 0 and 1, 1 and 2, etc. since edges are between hops)
-    #List of n by d node features for each hop subgraph
+
+    # Calculate number of nodes per edge hop
     nodes_per_hop_edge, node_features = [0] * len(edge_index), [0] * len(edge_index)
 
     for i in range(len(nodes_per_hop_edge)):
         nodes_per_hop_edge[i] = hop_node_counts[i] + hop_node_counts[i + 1]
         node_features[i] = torch.zeros((nodes_per_hop_edge[i], emb_dim))
-        
-        # print(node_features[i].shape)
-    print(f"nodes_per_hop_edge:{nodes_per_hop_edge}")
-    print(offsets)
-    bad_ct = 0
+
     # Combine edge indices across all relation types and hops
     for relation_type, rel_type_hop_edge_index in edge_index_dict.items():
-        print(relation_type, rel_type_hop_edge_index)  # Debug: Print edge indices for this relation type
-
         h_type = relation_type[0]  # Source node type
         t_type = relation_type[2]  # Target node type
 
         for hop, hop_edge_index in rel_type_hop_edge_index.items():
-            
             h_offset = offsets[h_type]  # Global offset for target nodes
 
             # Add offsets to source and target node indices to make them global
             hop_edge_index = hop_edge_index.clone()  # Ensure no in-place modification
-            print(hop_edge_index)
-            hop_edge_index[0] += h_offset # offset for source nodes
-            t_offset = offsets[t_type]  # Globa
+            hop_edge_index[0] += h_offset  # Offset for source nodes
+            t_offset = offsets[t_type]  # Global offset for target nodes
             hop_edge_index[1] += t_offset 
 
             # Concatenate the new edges to the existing edge_index for the current hop
             edge_index[hop] = torch.cat((edge_index[hop], hop_edge_index), dim=1)
-            print(hop_edge_index[0])
-            print(hop_edge_index[1])
-            # SLOW 
+
+            # Populate node features for the current hop
             for h_node_idx, t_node_idx in zip(hop_edge_index[0], hop_edge_index[1]):
                 if node_features_dict[h_type][hop].size(0):
                     if h_node_idx >= node_features[hop].shape[0]:
-                        bad_ct += 1
-                        print(f"bad_ct: {bad_ct}")
+                        # Handle case where index is out of bounds
+                        pass
                     else:
                         try:
                             # Attempt to access the element
@@ -379,44 +359,31 @@ def process_hetero_batch(x_dict, batch: HeteroData, emb_dim):
                             raise  # Re-raise the exception after logging information
 
                 if node_features_dict[t_type][hop].size(0):
-                    # print("ARGAGASDFSAFDSAF")
-                    # print(node_features)
-                    # print(hop)
-                    # print(t_node_idx)
-                    # print(t_offset)
-                    # print(node_features_dict[t_type])
-                    # print(node_features_dict[t_type][hop].size())
-                    # print(node_features_dict[t_type][hop][t_node_idx - t_offset])
                     node_features[hop][t_node_idx] = node_features_dict[t_type][hop][t_node_idx - t_offset]
 
-    print(node_features, x_index)
-    return node_features, x_index
+    return node_features, edge_index
 
 def num_node_features_get(self):
-    # Just return the same dictionary that the original property would return
+    # Return the number of node features for each node type
     return {
         key: store.num_node_features
         for key, store in self._node_store_dict.items()
     }
 
 def num_node_features_set(self, new_features_dict):
-    # new_features_dict should be {node_type: new_num_features}
-    # We'll try to adjust each store.x accordingly.
+    # Adjust each store.x according to new feature counts
     for key, new_num_feats in new_features_dict.items():
         store = self._node_store_dict[key]
         
-        # If there is no x, we must create one
         if store.x is None:
-            # We need to know how many nodes there are to create a new x.
-            # Let's assume store.num_nodes gives us the number of nodes:
+            # Create a new feature matrix if it doesn't exist
             num_nodes = store.num_nodes
-            # Create a placeholder tensor for the new feature matrix
             store.x = torch.zeros((num_nodes, new_num_feats))
         else:
-            # If store.x exists, reshape or recreate it.
+            # Reshape or recreate the existing feature matrix
             old_num_feats = store.x.size(1)
             if new_num_feats > old_num_feats:
-                # Increase the number of features by adding zeros
+                # Increase the number of features
                 num_nodes = store.x.size(0)
                 new_x = torch.zeros((num_nodes, new_num_feats), dtype=store.x.dtype, device=store.x.device)
                 new_x[:, :old_num_feats] = store.x
@@ -424,7 +391,6 @@ def num_node_features_set(self, new_features_dict):
             elif new_num_feats < old_num_feats:
                 # Decrease the number of features by truncation
                 store.x = store.x[:, :new_num_feats]
-            # If new_num_feats == old_num_feats, nothing needs to be done
 
 # Monkey patch the property on HeteroData
 HeteroData.num_node_features = property(num_node_features_get, num_node_features_set)
@@ -451,32 +417,7 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
         for node_type in batch.node_types
     }
 
-    print("Heterogeneous node counts before to_homogeneous:", hetero_node_counts)
-    print(f"x_dict keys: {x_dict}")
-
-    homo = batch.to_homogeneous()
-    # print(f"type(homo): {type(homo)}")
-    # print(f"homo.x: {homo.x}")
-    # print(f"homo.edge_index: {homo.edge_index}")
-    # print(f"homo.n_id: {homo.n_id}")
-    # batch.num_node_features = og_num_node_features
-    
-    # print(f"batch.num_node_features: {batch.num_node_features}")
-    # print(f"homo edge_index: {homo.edge_index}")
-    # print(f"homo n_ids: {homo.n_id}")
-    # print(f"homo node_type for each node: {homo.node_type}")
-    # print(f"unique homo node_types: {torch.unique(homo.node_type)}")
-    # print(f"homo node_type max: {max(homo.node_type)}")
-    # print(f"homo node_type min: {min(homo.node_type)}")
-
-    print(f"batch.num_node_features: {batch.num_node_features}")
-    print(f"homo.n_id: {homo.n_id}")
-
-    # For heterogeneous batch
-    hetero_node_counts = {
-        node_type: batch[node_type].num_nodes
-        for node_type in batch.node_types
-    }
+    homo = batch.to_homogeneous()  # Convert to homogeneous representation
 
     # For homogeneous graph
     homo_node_types, homo_node_counts = torch.unique(homo.node_type, return_counts=True)
@@ -485,37 +426,16 @@ def process_hetero_batch_vectorized(x_dict, batch: HeteroData, emb_dim):
         for type_idx, count in zip(homo_node_types, homo_node_counts)
     }
 
-    print("Heterogeneous node counts:", hetero_node_counts)
-    print("Homogeneous node counts:", homo_node_counts_dict)
-    
-    # maps batch_id to node_type string
+    # Map batch_id to node_type string
     orig_id_to_node_type = {orig_id: node_type for orig_id, node_type in enumerate(homo.node_type)}  
-    orig_id_to_str = {orig_id: batch.node_types[type_idx.item()] 
-                  for orig_id, type_idx in enumerate(homo.node_type)}
-    print(f"orig_id_to_str: {orig_id_to_str}")
-    # print(f"node_idx_to_str: {node_idx_to_str}")
-    # print(f"homo.n_id: {homo.n_id}")
-    print(f"homo.node_type: {homo.node_type[500:513]}")
-    # print(f"node_idx_to_str:{node_idx_to_str}")
-    print(f"len(homo.n_id): {len(homo.n_id)}")
-    node_features = torch.zeros((len(homo.n_id), emb_dim))
-    print(f"batch.node_type: {homo.node_type}")
-    # print(f"x_dict drivers.shape: {x_dict['drivers'].shape}")
+    orig_id_to_str = {orig_id: batch.node_types[type_idx.item()] for orig_id, type_idx in enumerate(homo.node_type)}
+    
+    node_features = torch.zeros((len(homo.n_id), emb_dim))  # Initialize node features tensor
     for orig_id, (new_id, node_type) in enumerate(zip(homo.n_id, homo.node_type)):
-        print(f"node_type.item(): {node_type.item()}")
-        # string_node_type = orig_id_to_node_type[node_type.item()]
         string_node_type = orig_id_to_str[orig_id]
-        print(f"string_node_type:{string_node_type}")
-        print(f"n_id: {new_id}")
-        # print(f"x_dict[string_node_type].shape: {x_dict[string_node_type].shape}")  # ERROR
-        first_pairs = {k: x_dict[k] for k in list(x_dict)[:2]}
-        print(f"stuff from x_dict: {first_pairs}")
-        print(f"string_node_type: {string_node_type}")
-        print(f"new_id: {new_id}")
-        emb_vector = x_dict[string_node_type][new_id]
+        emb_vector = x_dict[string_node_type][new_id]  # Get embedding vector for the node
         node_features[orig_id] = emb_vector
-    # print(node_features.shape)
-    # print(homo.edge_index)
+
     return node_features, homo.edge_index 
 
 class BaselineModel(torch.nn.Module):
@@ -598,6 +518,9 @@ class BaselineModel(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        """
+        Reset parameters for all components of the model.
+        """
         self.encoder.reset_parameters()
         self.temporal_encoder.reset_parameters()
         self.gnn.reset_parameters()
@@ -607,13 +530,7 @@ class BaselineModel(torch.nn.Module):
         if self.id_awareness_emb is not None:
             self.id_awareness_emb.reset_parameters()
 
-    # make sure to adjust batch before HeteroData 
-    def forward(
-        self,
-        batch: HeteroData,
-        # batch_scuffed, 
-        entity_table: NodeType,
-    ) -> Tensor:
+    def forward(self, batch: HeteroData, entity_table: NodeType) -> Tensor:
         """
         Forward pass through the BaselineModel.
 
@@ -649,12 +566,7 @@ class BaselineModel(torch.nn.Module):
         
         return self.head(x_dict[entity_table][: seed_time.size(0)])
 
-    def forward_dst_readout(
-        self,
-        batch: HeteroData,
-        entity_table: NodeType,
-        dst_table: NodeType,
-    ) -> Tensor:
+    def forward_dst_readout(self, batch: HeteroData, entity_table: NodeType, dst_table: NodeType) -> Tensor:
         """
         Forward pass for destination readout.
 
@@ -667,9 +579,7 @@ class BaselineModel(torch.nn.Module):
             Tensor: The output tensor after processing the destination readout.
         """
         if self.id_awareness_emb is None:
-            raise RuntimeError(
-                "id_awareness must be set True to use forward_dst_readout"
-            )
+            raise RuntimeError("id_awareness must be set True to use forward_dst_readout")
         seed_time = batch[entity_table].seed_time
         x_dict = self.encoder(batch.tf_dict)
         # Add ID-awareness to the root node

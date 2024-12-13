@@ -10,19 +10,19 @@ from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
 from src.models.baseline_models import process_hetero_batch
 
 # General Architecture Stuff
-# add regularization if needed (we can see based on the training dynamics of model) (using AdamW by default)
-# sharing vs not sharing params for queries and keys 
-# lr warmup and decay 
-# check optimality of torch methods being called 
+# Consider adding regularization if needed based on training dynamics (using AdamW by default)
+# Evaluate sharing vs not sharing parameters for queries and keys 
+# Implement learning rate warmup and decay 
+# Check optimality of torch methods being called 
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, 
-                 embed_dim, # config
-                 num_heads, # config
-                 num_nodes, # pass in directly
-                 num_edges, # pass in directly
-                 adj_mat, # pass in directly 
-                 dropout, # config
+                 embed_dim,  # config
+                 num_heads,  # config
+                 num_nodes,  # pass in directly
+                 num_edges,  # pass in directly
+                 adj_mat,  # pass in directly 
+                 dropout,  # config
                  is_hh_att=False, 
                  is_he_att=False, 
                  is_eh_att=False, 
@@ -66,15 +66,15 @@ class MultiHeadAttention(nn.Module):
         self.emd_dim = embed_dim
         self.head_dim = self.emd_dim // self.n_head
         
-        # additional params 
-        self.is_hh_att = is_hh_att  # determines if the adjacency calculation is used 
+        # Additional parameters to control attention types
+        self.is_hh_att = is_hh_att  # Determines if the adjacency calculation is used 
         self.is_he_att = is_he_att
         self.is_eh_att = is_eh_att 
         self.is_ee_att = is_ee_att 
-        self.is_e_out = is_e_out  # if the output of the computation gives new edge embeddings
+        self.is_e_out = is_e_out  # If the output of the computation gives new edge embeddings
 
-        self.adj_mat = adj_mat # find where to get adjacency matrix from relbench and pass in as param to constructor (function to convert coo tensor to adj matrix) (pass in the coo tensor and do sparse_mm instead of passing adj mat since we don't want to bloat memory either)
-        # find where to get the number of edges and the number of nodes in the graph from relbench (used for making sure that the shapes of the proj matrices match up)
+        # Adjacency matrix and projection matrices for node and edge embeddings
+        self.adj_mat = adj_mat
         self.shape_proj_mat_1 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
         self.shape_proj_mat_2 = nn.Parameter(torch.empty(num_nodes, num_edges))  # (num_nodes, num_edges)
         nn.init.xavier_uniform_(self.shape_proj_mat_1)
@@ -96,7 +96,7 @@ class MultiHeadAttention(nn.Module):
         N, E = value.shape
         H = self.n_head
 
-        # new modifications 
+        # Select appropriate query and key based on attention flags
         if self.is_hh_att:
             self.query = self.query_h 
             self.key = self.key_h
@@ -118,13 +118,13 @@ class MultiHeadAttention(nn.Module):
         else:
             self.value = self.value_h 
 
-        query = self.query(q)# (N, E)
-        key = self.key(k) # (N, E)
-        value = self.value(v) # (N, E)
+        query = self.query(q)  # (N, E)
+        key = self.key(k)  # (N, E)
+        value = self.value(v)  # (N, E)
 
-        # new modifications
-        if self.is_hh_att:
-            query = torch.sparse.mm(query, self.adj_mat)
+        # Apply modifications based on attention flags
+        if self.is_hh_att:  # Equivalent of a graph convolution 
+            query = torch.sparse.mm(query, self.adj_mat)  # Might need to do conversion (pass in placeholder tensor torch.ones())
         
         if self.is_he_att:
             key = self.shape_proj_mat_1 @ key 
@@ -132,7 +132,7 @@ class MultiHeadAttention(nn.Module):
         if self.is_eh_att:
             key = self.shape_proj_mat_2 @ key  
         
-        query, key, value = query.view(N, H, E//H), key.view(N, H, E//H), value.view(N, H, E//H) 
+        query, key, value = query.view(N, H, E // H), key.view(N, H, E // H), value.view(N, H, E // H) 
         
         # naive attn 
         # qk = torch.matmul(query, key.transpose(2,3))     
@@ -145,7 +145,7 @@ class MultiHeadAttention(nn.Module):
         output = output.view(N, E)
         return output
 
-# if we want to use later
+# If we want to use later
 class GeGLU(nn.Module):
     def __init__(self):
         """
@@ -197,12 +197,12 @@ class FeedForward(nn.Module):
 
 class Block(nn.Module):
     def __init__(self,
-                 embed_dim, # config
-                 num_heads, # config
-                 num_nodes, # pass in directly
-                 num_edges, # pass in directly
-                 adj_mat, # pass in directly 
-                 dropout_att, # config
+                 embed_dim,  # config
+                 num_heads,  # config
+                 num_nodes,  # pass in directly
+                 num_edges,  # pass in directly
+                 adj_mat,  # pass in directly 
+                 dropout_att,  # config
                  dropout_ffwd,  # add to config 
                  ):
         """
@@ -218,9 +218,8 @@ class Block(nn.Module):
             dropout_att (float): Dropout rate for attention.
             dropout_ffwd (float): Dropout rate for the feedforward network.
         """
-        # n_embed, n_heads, head_size, dropout,
         super().__init__()
-        # head_size = embed_dim // num_heads 
+        # Initialize multiple attention heads
         self.sa_hh_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_hh_att=True)  # (N, H, E/H)
         self.sa_ee_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True)  # (N, H, E/H)
         self.sa_he_h = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True)  # (N, H, E/H)
@@ -230,7 +229,6 @@ class Block(nn.Module):
         self.sa_ee_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_ee_att=True, is_e_out=True)  # (N, H, E/H)
         self.sa_he_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_he_att=True, is_e_out=True)  # (N, H, E/H)
         self.sa_eh_e = MultiHeadAttention(embed_dim, num_heads, num_nodes, num_edges, adj_mat, dropout_att, is_eh_att=True, is_e_out=True)  # (N, H, E/H)
-
 
         self.ffwd_h = FeedForward(embed_dim, dropout_ffwd)
         self.ffwd_e = FeedForward(embed_dim, dropout_ffwd)
@@ -253,9 +251,11 @@ class Block(nn.Module):
         """
         h = self.rmsn1_h(x_node)
         e = self.rmsn1_e(x_edge)
+        # Compute attention outputs for nodes and edges
         x_h = self.sa_hh_h(h, h, h) + self.sa_ee_h(e, e, h) + self.sa_eh_h(e, h, h) + self.sa_he_h(h, e, h)  # can add gating here 
-        x_e = self.sa_hh_e(h, h, h) + self.sa_ee_e(e, e, h) + self.sa_eh_e(e, h, h) + self.sa_he_e(h, e, h)  # can add gating here  # shouldn't be a problem in terms of efficiency but we can check       
-
+        x_e = self.sa_hh_e(h, h, h) + self.sa_ee_e(e, e, h) + self.sa_eh_e(e, h, h) + self.sa_he_e(h, e, h)  # can add gating here  
+        
+        # Apply feedforward networks
         x_h = self.ffwd_h(self.rmsn2_h(x_h))
         x_e = self.ffwd_e(self.rmsn2_h(x_e))
         return x_h, x_e 
@@ -265,12 +265,12 @@ class RelTransformer(nn.Module):
                 data: HeteroData,
                 col_stats_dict: Dict[str, Dict[str, Dict[StatType, Any]]],
                 node_embeddings, 
-                n_embed, # config
-                num_blocks, # config              
-                num_heads, # config
-                num_nodes, # pass in directly
-                num_edges, # pass in directly
-                adj_mat, # pass in directly 
+                n_embed,  # config
+                num_blocks,  # config              
+                num_heads,  # config
+                num_nodes,  # pass in directly
+                num_edges,  # pass in directly
+                adj_mat,  # pass in directly 
                 dropout):  # config 
         """
         Initializes the RelTransformer module, which consists of multiple
@@ -287,7 +287,7 @@ class RelTransformer(nn.Module):
             dropout (float): Dropout rate for the transformer.
         """
         super().__init__()
-        # process RDB
+        # Initialize encoders for heterogeneous data
         self.encoder = HeteroEncoder(
             channels=n_embed,
             node_to_col_names_dict={
@@ -303,7 +303,7 @@ class RelTransformer(nn.Module):
             channels=n_embed,
         )
 
-        # process embeddings 
+        # Process embeddings 
         self.node_embeddings = nn.Parameter(node_embeddings)
         self.num_nodes = node_embeddings.shape[0]  # N
         self.n_embed = n_embed 
@@ -320,12 +320,12 @@ class RelTransformer(nn.Module):
         Returns:
             Tensor: Output tensor after passing through all transformer blocks.
         """
-        # pass in x_dict into Gabe's function to get the node embeddings and batch (HeteroData object) into fwd method (look in baseline_models.py)
+        # Update node embeddings based on the input batch
         self.node_embeddings = process_hetero_batch(x_dict, batch, self.n_embed)
         out_h = self.node_embeddings
         out_e = self.edge_embeddings 
         for block in self.blocks:
-            out_h, out_e = block(out_h, out_e)  # is there something weird about this? yes! what if we try learning an (n+m) x d tensor instead
+            out_h, out_e = block(out_h, out_e)  # Process through each block
         return out_h
 
 # TODOS:
