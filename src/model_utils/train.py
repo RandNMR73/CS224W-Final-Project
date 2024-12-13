@@ -15,7 +15,7 @@ import wandb  # add wandb to docker container
 import os # add os to container 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from baseline_models import BaselineModel
+from src.models.baseline_models import BaselineModel
 from dataset import create_task_train_dict
 
 from torch_geometric.loader import NeighborLoader

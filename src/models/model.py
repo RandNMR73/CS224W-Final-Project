@@ -7,7 +7,7 @@ from torch_frame.data.stats import StatType
 from torch_geometric.data import HeteroData
 
 from relbench.modeling.nn import HeteroEncoder, HeteroTemporalEncoder
-from baseline_models import process_hetero_batch
+from src.models.baseline_models import process_hetero_batch
 
 # General Architecture Stuff
 # add regularization if needed (we can see based on the training dynamics of model) (using AdamW by default)
