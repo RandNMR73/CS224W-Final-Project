@@ -56,7 +56,10 @@ From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04  #base image with required CUD
     python3.10 -m pip install relbench || { echo "Failed to install relbench"; exit 1; }
     python3.10 -m pip install torchvision==0.19 || { echo "Failed to install torchvision"; exit 1; }
     python3.10 -m pip install -U sentence-transformers || { echo "Failed to install sentence-transformers"; exit 1; }
-
+    python3.10 -m pip install wandb
+    python3.10 -m pip install Cython==3.0.11 
+    python3.10 -m pip install scikit-learn==1.5.2
+    
     # Verify installations
     python3.10 --version || { echo "Python installation failed"; exit 1; }
     nvcc --version || { echo "CUDA not found"; exit 1; }
